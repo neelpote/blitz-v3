@@ -1,6 +1,11 @@
+[toolchain]
+
 [features]
 resolution = true
 skip-lint = false
+
+[programs.devnet]
+deco_private = "4TocTt21C8CYTGCjP7BgynrL8kQSn2zTHbMhSyB5hivX"
 
 [registry]
 url = "https://api.apr.dev"
@@ -8,9 +13,6 @@ url = "https://api.apr.dev"
 [provider]
 cluster = "devnet"
 wallet = "~/.config/solana/id.json"
-
-[programs.devnet]
-deco_private = "9SBBpJa9rd8DRP6tkcqnyad4LaCWWB3FgSFmZ2tFVhq"
 
 [scripts]
 test = "NODE_OPTIONS='--no-deprecation' yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/**/*.ts"

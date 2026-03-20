@@ -2,205 +2,216 @@ import { useCallback, useMemo } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { AnchorProvider, Program, BN, web3 } from '@coral-xyz/anchor';
-import { IDL, PROGRAM_ID } from '../idl/deco_private';
+import {
+  IDL,
+  PROGRAM_ID,
+  MAGIC_ROUTER_RPC,
+  MAGIC_PROGRAM,
+  MAGIC_CONTEXT,
+  DELEGATION_PROGRAM,
+  PERMISSION_PROGRAM,
+} from '../idl/deco_private';
 
-// MagicBlock ephemeral RPC — votes are sent here (private, inside TEE)
-const EPHEMERAL_RPC = 'https://devnet.magicblock.app';
+// Magic Router: single endpoint — auto-routes to ER or Solana base chain
+// based on whether writable accounts are delegated or not.
+const MAGIC_ROUTER_WS = 'wss://devnet-router.magicblock.app';
 
-// MagicBlock constants
-const MAGIC_PROGRAM_ID = new PublicKey('MagicProgram11111111111111111111111111111111');
-const MAGIC_CONTEXT_ID = new PublicKey('MagicContext1111111111111111111111111111111');
-const PERMISSION_PROGRAM_ID = new PublicKey('9tKE7iUkFBMSFA9G31UcCMCFDxkSMHiHfGkFMkNribHK');
-const DELEGATION_PROGRAM_ID = new PublicKey('DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh');
+const DELEGATION_PROGRAM_ID = new PublicKey(DELEGATION_PROGRAM);
+const PERMISSION_PROGRAM_ID = new PublicKey(PERMISSION_PROGRAM);
+const MAGIC_PROGRAM_ID      = new PublicKey(MAGIC_PROGRAM);
+const MAGIC_CONTEXT_ID      = new PublicKey(MAGIC_CONTEXT);
 
 const GRANT_ROUND_SEED = Buffer.from('grant_round');
 const MEMBER_VOTE_SEED = Buffer.from('member_vote');
-
 const programId = new PublicKey(PROGRAM_ID);
 
-function getGrantRoundPda(roundId: number): [PublicKey, number] {
-  const roundIdBuf = Buffer.alloc(8);
-  roundIdBuf.writeBigUInt64LE(BigInt(roundId));
-  return PublicKey.findProgramAddressSync(
-    [GRANT_ROUND_SEED, roundIdBuf],
-    programId
-  );
+// ── PDA helpers ──────────────────────────────────────────────────────────────
+
+export function getGrantRoundPda(roundId: number): PublicKey {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(BigInt(roundId));
+  return PublicKey.findProgramAddressSync([GRANT_ROUND_SEED, buf], programId)[0];
 }
 
-function getMemberVotePda(roundId: number, voter: PublicKey): [PublicKey, number] {
-  const roundIdBuf = Buffer.alloc(8);
-  roundIdBuf.writeBigUInt64LE(BigInt(roundId));
-  return PublicKey.findProgramAddressSync(
-    [MEMBER_VOTE_SEED, roundIdBuf, voter.toBuffer()],
-    programId
-  );
+export function getMemberVotePda(roundId: number, voter: PublicKey): PublicKey {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(BigInt(roundId));
+  return PublicKey.findProgramAddressSync([MEMBER_VOTE_SEED, buf, voter.toBuffer()], programId)[0];
 }
+
+/** Derive the three delegation PDAs the SDK expects for a given account */
+function getDelegationPdas(accountPda: PublicKey) {
+  const [bufferPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('buffer'), accountPda.toBuffer()],
+    DELEGATION_PROGRAM_ID,
+  );
+  const [delegationRecordPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('delegation'), accountPda.toBuffer()],
+    DELEGATION_PROGRAM_ID,
+  );
+  const [delegationMetadataPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('delegation-metadata'), accountPda.toBuffer()],
+    DELEGATION_PROGRAM_ID,
+  );
+  return { bufferPda, delegationRecordPda, delegationMetadataPda };
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useDecoProgram() {
   const { connection } = useConnection();
   const wallet = useWallet();
 
-  // Base-chain provider (devnet) — used for createGrantRound + delegatePda
+  // Base-chain provider (Solana devnet via wallet adapter connection)
   const baseProvider = useMemo(() => {
     if (!wallet.publicKey || !wallet.signTransaction) return null;
-    return new AnchorProvider(connection, wallet as any, {
-      commitment: 'confirmed',
-    });
-  }, [connection, wallet]);
+    return new AnchorProvider(connection, wallet as any, { commitment: 'confirmed' });
+  }, [connection, wallet.publicKey, wallet.signTransaction]);
 
-  // Ephemeral provider — used for castVote + tallyAndReveal (inside TEE)
-  const ephemeralProvider = useMemo(() => {
+  // Magic Router provider — single endpoint that auto-routes to ER or base chain
+  const routerProvider = useMemo(() => {
     if (!wallet.publicKey || !wallet.signTransaction) return null;
-    const ephemeralConn = new web3.Connection(EPHEMERAL_RPC, 'confirmed');
-    return new AnchorProvider(ephemeralConn, wallet as any, {
+    const routerConn = new web3.Connection(MAGIC_ROUTER_RPC, {
+      wsEndpoint: MAGIC_ROUTER_WS,
       commitment: 'confirmed',
     });
-  }, [wallet]);
+    return new AnchorProvider(routerConn, wallet as any, { commitment: 'confirmed' });
+  }, [wallet.publicKey, wallet.signTransaction]);
 
   const baseProgram = useMemo(
     () => (baseProvider ? new Program(IDL as any, programId, baseProvider) : null),
-    [baseProvider]
+    [baseProvider],
   );
 
-  const ephemeralProgram = useMemo(
-    () => (ephemeralProvider ? new Program(IDL as any, programId, ephemeralProvider) : null),
-    [ephemeralProvider]
+  // Router program: used for castVote (ER when delegated) and tallyAndReveal
+  const routerProgram = useMemo(
+    () => (routerProvider ? new Program(IDL as any, programId, routerProvider) : null),
+    [routerProvider],
   );
 
-  /** 1. Create a new grant round on base chain */
-  const createGrantRound = useCallback(
-    async (roundId: number) => {
-      if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
-      const [grantRoundPda] = getGrantRoundPda(roundId);
+  // ── createGrantRound — base chain ─────────────────────────────────────────
+  const createGrantRound = useCallback(async (roundId: number) => {
+    if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
+    const pda = getGrantRoundPda(roundId);
+    const tx = await baseProgram.methods
+      .createGrantRound(new BN(roundId))
+      .accounts({
+        grantRound:    pda,
+        authority:     wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log('✅ Grant round created:', tx);
+    return tx;
+  }, [baseProgram, wallet.publicKey]);
 
-      const tx = await baseProgram.methods
-        .createGrantRound(new BN(roundId))
-        .accounts({
-          grantRound: grantRoundPda,
-          authority: wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+  // ── delegatePda — base chain, delegates a PDA to the ER ──────────────────
+  // accountType: { grantRound: { roundId } } | { memberVote: { roundId, voter } }
+  const delegatePda = useCallback(async (
+    accountPda: PublicKey,
+    accountType: any,
+  ) => {
+    if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
+    const { bufferPda, delegationRecordPda, delegationMetadataPda } = getDelegationPdas(accountPda);
 
-      console.log(`✅ Grant round ${roundId} created. Tx: ${tx}`);
-      return tx;
-    },
-    [baseProgram, wallet.publicKey]
-  );
+    const tx = await baseProgram.methods
+      .delegatePda(accountType)
+      .accounts({
+        bufferPda,
+        delegationRecordPda,
+        delegationMetadataPda,
+        pda:               accountPda,
+        payer:             wallet.publicKey,
+        validator:         null,
+        ownerProgram:      programId,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+        systemProgram:     SystemProgram.programId,
+      })
+      .rpc();
+    console.log('✅ PDA delegated to ER:', tx);
+    return tx;
+  }, [baseProgram, wallet.publicKey]);
 
-  /** 2. Delegate a PDA into the MagicBlock TEE (base chain) */
-  const delegatePda = useCallback(
-    async (roundId: number) => {
-      if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
-      const [grantRoundPda] = getGrantRoundPda(roundId);
+  // ── delegateGrantRound — convenience wrapper ──────────────────────────────
+  const delegateGrantRound = useCallback(async (roundId: number) => {
+    const pda = getGrantRoundPda(roundId);
+    return delegatePda(pda, { grantRound: { roundId: new BN(roundId) } });
+  }, [delegatePda]);
 
-      const tx = await baseProgram.methods
-        .delegatePda({ grantRound: { roundId: new BN(roundId) } })
-        .accounts({
-          pda: grantRoundPda,
-          payer: wallet.publicKey,
-          validator: null,
-          ownerProgram: programId,
-          delegationProgram: DELEGATION_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+  // ── delegateMemberVote — convenience wrapper ──────────────────────────────
+  const delegateMemberVote = useCallback(async (roundId: number) => {
+    if (!wallet.publicKey) throw new Error('Wallet not connected');
+    const pda = getMemberVotePda(roundId, wallet.publicKey);
+    return delegatePda(pda, {
+      memberVote: { roundId: new BN(roundId), voter: wallet.publicKey },
+    });
+  }, [delegatePda, wallet.publicKey]);
 
-      console.log(`✅ PDA delegated to TEE. Tx: ${tx}`);
-      return tx;
-    },
-    [baseProgram, wallet.publicKey]
-  );
+  // ── castVote — via Magic Router (routes to ER if MemberVote is delegated) ─
+  const castVote = useCallback(async (roundId: number, projectPubkey: PublicKey) => {
+    if (!routerProgram || !wallet.publicKey) throw new Error('Wallet not connected');
+    const pda = getMemberVotePda(roundId, wallet.publicKey);
+    const tx = await routerProgram.methods
+      .castVote(new BN(roundId), projectPubkey)
+      .accounts({
+        memberVote:    pda,
+        voter:         wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log('✅ Vote cast via Magic Router:', tx);
+    return tx;
+  }, [routerProgram, wallet.publicKey]);
 
-  /** 3. Cast a private vote — sent to ephemeral RPC (inside TEE) */
-  const castVote = useCallback(
-    async (roundId: number, projectPubkey: PublicKey) => {
-      if (!ephemeralProgram || !wallet.publicKey) throw new Error('Wallet not connected');
-      const [memberVotePda] = getMemberVotePda(roundId, wallet.publicKey);
+  // ── fetchAllGrantRounds — base chain ──────────────────────────────────────
+  const fetchAllGrantRounds = useCallback(async () => {
+    if (!baseProgram) return [];
+    try {
+      const all = await baseProgram.account.grantRound.all();
+      return all.map((r: any) => ({
+        pubkey:   r.publicKey as PublicKey,
+        roundId:  r.account.roundId,
+        isActive: r.account.isActive,
+        winner:   r.account.winner,
+      }));
+    } catch { return []; }
+  }, [baseProgram]);
 
-      const tx = await ephemeralProgram.methods
-        .castVote(new BN(roundId), projectPubkey)
-        .accounts({
-          memberVote: memberVotePda,
-          voter: wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+  // ── fetchMyVotes — base chain ─────────────────────────────────────────────
+  const fetchMyVotes = useCallback(async () => {
+    if (!baseProgram || !wallet.publicKey) return [];
+    try {
+      const all = await baseProgram.account.memberVote.all();
+      return all
+        .filter((v: any) => v.account.voter.equals(wallet.publicKey!))
+        .map((v: any) => ({
+          pubkey:   v.publicKey as PublicKey,
+          roundId:  v.account.roundId,
+          voter:    v.account.voter,
+          votedFor: v.account.votedFor,
+        }));
+    } catch { return []; }
+  }, [baseProgram, wallet.publicKey]);
 
-      console.log(`✅ Vote cast for ${projectPubkey.toBase58()}. Tx: ${tx}`);
-      return tx;
-    },
-    [ephemeralProgram, wallet.publicKey]
-  );
-
-  /** 4. Tally votes and reveal winner — sent to ephemeral RPC */
-  const tallyAndReveal = useCallback(
-    async (roundId: number, voter1: PublicKey, voter2: PublicKey) => {
-      if (!ephemeralProgram || !wallet.publicKey) throw new Error('Wallet not connected');
-
-      const [grantRoundPda] = getGrantRoundPda(roundId);
-      const [vote1Pda] = getMemberVotePda(roundId, voter1);
-      const [vote2Pda] = getMemberVotePda(roundId, voter2);
-
-      // Permission PDAs are derived by the permission program
-      const [permissionRound] = PublicKey.findProgramAddressSync(
-        [grantRoundPda.toBuffer()],
-        PERMISSION_PROGRAM_ID
-      );
-      const [permission1] = PublicKey.findProgramAddressSync(
-        [vote1Pda.toBuffer()],
-        PERMISSION_PROGRAM_ID
-      );
-      const [permission2] = PublicKey.findProgramAddressSync(
-        [vote2Pda.toBuffer()],
-        PERMISSION_PROGRAM_ID
-      );
-
-      const tx = await ephemeralProgram.methods
-        .tallyAndReveal()
-        .accounts({
-          grantRound: grantRoundPda,
-          vote1: vote1Pda,
-          vote2: vote2Pda,
-          permissionRound,
-          permission1,
-          permission2,
-          payer: wallet.publicKey,
-          permissionProgram: PERMISSION_PROGRAM_ID,
-          magicProgram: MAGIC_PROGRAM_ID,
-          magicContext: MAGIC_CONTEXT_ID,
-        })
-        .rpc();
-
-      console.log(`✅ Tally complete. Tx: ${tx}`);
-      return tx;
-    },
-    [ephemeralProgram, wallet.publicKey]
-  );
-
-  /** Fetch grant round state from base chain */
-  const fetchGrantRound = useCallback(
-    async (roundId: number) => {
-      if (!baseProgram) return null;
-      const [grantRoundPda] = getGrantRoundPda(roundId);
-      try {
-        return await baseProgram.account.grantRound.fetch(grantRoundPda);
-      } catch {
-        return null;
-      }
-    },
-    [baseProgram]
-  );
+  // ── hasVoted ──────────────────────────────────────────────────────────────
+  const hasVoted = useCallback(async (roundId: number): Promise<boolean> => {
+    if (!baseProgram || !wallet.publicKey) return false;
+    const pda = getMemberVotePda(roundId, wallet.publicKey);
+    try {
+      await baseProgram.account.memberVote.fetch(pda);
+      return true;
+    } catch { return false; }
+  }, [baseProgram, wallet.publicKey]);
 
   return {
     connected: !!wallet.publicKey,
     publicKey: wallet.publicKey,
     createGrantRound,
-    delegatePda,
+    delegateGrantRound,
+    delegateMemberVote,
     castVote,
-    tallyAndReveal,
-    fetchGrantRound,
-    getGrantRoundPda,
-    getMemberVotePda,
+    fetchAllGrantRounds,
+    fetchMyVotes,
+    hasVoted,
   };
 }
