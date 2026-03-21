@@ -614,6 +614,13 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
         </div>
         <p className="text-stone-500 text-sm mb-8">Sorted by votes. Funds go directly to the project wallet.</p>
 
+        {stakedTotal < 0.5 && (
+          <div className="flex items-center gap-3 px-4 py-3 mb-6 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-bold">
+            <Lock size={14} className="shrink-0" />
+            Stake at least 0.5 SOL above to unlock investing.
+          </div>
+        )}
+
         {sortedRounds.length === 0 ? (
           <div className="text-center py-16">
             <Shield size={32} className="mx-auto mb-4 text-stone-200" />
@@ -690,7 +697,8 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
                           placeholder="SOL"
                           className="w-28 px-3 py-2 border border-stone-200 rounded-xl text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors text-sm" />
                       </div>
-                      <button onClick={() => handleInvest(roundId)} disabled={isInvesting || !connected}
+                      <button onClick={() => handleInvest(roundId)} disabled={isInvesting || !connected || stakedTotal < 0.5}
+                        title={stakedTotal < 0.5 ? 'Stake at least 0.5 SOL first' : undefined}
                         className="px-5 py-2 rounded-xl font-bold text-sm uppercase tracking-widest transition-colors disabled:opacity-50"
                         style={{ backgroundColor: GOLD, color: '#1a1a1a' }}>
                         {isInvesting ? '...' : 'Invest'}
