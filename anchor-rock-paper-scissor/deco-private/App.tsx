@@ -30,6 +30,29 @@ interface VoteData {
   votedFor: any | null;
 }
 
+// Off-chain metadata stored in localStorage
+interface GrantMeta {
+  name: string;
+  desc: string;
+  founder: string;
+  twitter: string;
+  gitRepo: string;
+  imageUrl: string | null;
+  walletAddress: string;
+}
+
+const STORAGE_KEY = 'deco_grant_meta';
+
+function loadAllMeta(): Record<number, GrantMeta> {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveMeta(roundId: number, meta: GrantMeta) {
+  const all = loadAllMeta();
+  all[roundId] = meta;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+}
+
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 const MetricCard = ({ label, value, delay }: { label: string; value: string; delay: string }) => (
   <div className="flex flex-col items-center p-8 bg-white rounded-xl border border-stone-200 shadow-sm hover:shadow-md transition-all duration-300 w-full max-w-xs" style={{ animationDelay: delay }}>
@@ -105,7 +128,7 @@ const VoteModal = ({
 
 // ── Grants Page ───────────────────────────────────────────────────────────────
 const GrantsPage = ({
-  grantRounds, votedRounds, loading, connected, onVote, onBack, myVotes,
+  grantRounds, votedRounds, loading, connected, onVote, onBack, myVotes, grantMeta,
 }: {
   grantRounds: GrantRoundData[];
   votedRounds: Record<number, boolean>;
@@ -114,6 +137,7 @@ const GrantsPage = ({
   onVote: (name: string, roundId: number, pubkey: string) => void;
   onBack: () => void;
   myVotes: VoteData[];
+  grantMeta: Record<number, GrantMeta>;
 }) => {
   const [voteModal, setVoteModal] = useState<GrantRoundData | null>(null);
 
@@ -166,45 +190,92 @@ const GrantsPage = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-            {displayRounds.map((round, idx) => {
+            {displayRounds.map((round) => {
               const roundId = round.roundId.toNumber();
               const alreadyVoted = votedRounds[roundId] ?? false;
               const winner = round.winner ? round.winner.toString() : null;
               const isVoting = loading === 'vote-' + roundId;
+              const meta = grantMeta[roundId];
 
               return (
                 <div key={roundId} className="bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
                   {/* Card top accent */}
                   <div className="h-1 w-full" style={{ backgroundColor: round.isActive ? GOLD : '#d6d3d1' }} />
 
-                  <div className="p-8 flex flex-col flex-1">
-                    <div className="flex items-start justify-between mb-6">
+                  {/* Project image */}
+                  {meta?.imageUrl ? (
+                    <div className="w-full overflow-hidden" style={{ height: '160px' }}>
+                      <img src={meta.imageUrl} alt={meta.name} className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-full bg-stone-50 flex items-center justify-center" style={{ height: '100px' }}>
+                      <Shield size={32} className="text-stone-200" />
+                    </div>
+                  )}
+
+                  <div className="p-6 flex flex-col flex-1">
+                    {/* Title row */}
+                    <div className="flex items-start justify-between mb-3">
                       <div>
-                        <div className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-1">Grant Round</div>
-                        <h3 className="font-serif text-3xl text-stone-900">#{roundId}</h3>
+                        <div className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-0.5">Grant Round #{roundId}</div>
+                        <h3 className="font-serif text-2xl text-stone-900 leading-tight">
+                          {meta?.name || 'Unnamed Project'}
+                        </h3>
                       </div>
-                      <span className={`text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${round.isActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-stone-100 text-stone-400 border border-stone-200'}`}>
+                      <span className={`shrink-0 ml-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${round.isActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-stone-100 text-stone-400 border border-stone-200'}`}>
                         {round.isActive ? '● Active' : 'Closed'}
                       </span>
                     </div>
 
-                    {/* Diagram thumbnail */}
-                    <div className="rounded-xl overflow-hidden mb-6 bg-stone-50" style={{ height: '140px' }}>
-                      <Suspense fallback={<div className="h-full bg-stone-100" />}>
-                        {idx % 2 === 0 ? <SurfaceCodeDiagram /> : <PerformanceMetricDiagram />}
-                      </Suspense>
-                    </div>
+                    {/* Description */}
+                    {meta?.desc && (
+                      <p className="text-stone-500 text-sm leading-relaxed mb-4 line-clamp-2">{meta.desc}</p>
+                    )}
 
-                    <div className="space-y-2 mb-6 flex-1">
-                      {[
-                        { label: 'Privacy', value: '🔒 TEE Shielded' },
-                        { label: 'Winner', value: winner ? winner.slice(0, 6) + '...' + winner.slice(-4) : 'Pending' },
-                      ].map(r => (
-                        <div key={r.label} className="flex justify-between border-b border-stone-100 pb-2">
-                          <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">{r.label}</span>
-                          <span className="text-stone-700 text-xs font-bold">{r.value}</span>
+                    {/* Metadata rows */}
+                    <div className="space-y-2 mb-4 flex-1">
+                      {meta?.founder && (
+                        <div className="flex justify-between border-b border-stone-100 pb-2">
+                          <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Founder</span>
+                          <span className="text-stone-700 text-xs font-bold">{meta.founder}</span>
                         </div>
-                      ))}
+                      )}
+                      {meta?.twitter && (
+                        <div className="flex justify-between border-b border-stone-100 pb-2">
+                          <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Twitter</span>
+                          <a href={`https://twitter.com/${meta.twitter}`} target="_blank" rel="noopener noreferrer"
+                            className="text-xs font-bold hover:underline" style={{ color: GOLD }}>
+                            @{meta.twitter}
+                          </a>
+                        </div>
+                      )}
+                      {meta?.gitRepo && (
+                        <div className="flex justify-between border-b border-stone-100 pb-2">
+                          <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Repo</span>
+                          <a href={meta.gitRepo} target="_blank" rel="noopener noreferrer"
+                            className="text-xs font-bold font-mono truncate max-w-[140px] hover:underline" style={{ color: GOLD }}>
+                            {meta.gitRepo.replace('https://github.com/', '')}
+                          </a>
+                        </div>
+                      )}
+                      {meta?.walletAddress && (
+                        <div className="flex justify-between border-b border-stone-100 pb-2">
+                          <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Wallet</span>
+                          <span className="text-stone-500 text-xs font-mono">
+                            {meta.walletAddress.slice(0, 6)}...{meta.walletAddress.slice(-4)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between border-b border-stone-100 pb-2">
+                        <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Privacy</span>
+                        <span className="text-stone-700 text-xs font-bold">🔒 TEE Shielded</span>
+                      </div>
+                      <div className="flex justify-between border-b border-stone-100 pb-2">
+                        <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Winner</span>
+                        <span className="text-stone-700 text-xs font-bold">
+                          {winner ? winner.slice(0, 6) + '...' + winner.slice(-4) : 'Pending'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Vote button */}
@@ -235,8 +306,8 @@ const GrantsPage = ({
           round={voteModal}
           onClose={() => setVoteModal(null)}
           onVote={(roundId, pubkey) => {
-            const name = `Round #${roundId}`;
-            onVote(name, roundId, pubkey);
+            const meta = grantMeta[roundId];
+            onVote(meta?.name || `Round #${roundId}`, roundId, pubkey);
             setVoteModal(null);
           }}
           loading={loading === 'vote-' + voteModal.roundId.toNumber()}
@@ -285,6 +356,7 @@ const App: React.FC = () => {
   const [submitTwitter, setSubmitTwitter]   = useState('');
   const [submitImage, setSubmitImage]       = useState<File | null>(null);
   const [submitImageUrl, setSubmitImageUrl] = useState<string | null>(null);
+  const [grantMeta, setGrantMeta]           = useState<Record<number, GrantMeta>>(loadAllMeta);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -357,6 +429,18 @@ const App: React.FC = () => {
     try {
       const nextId = grantRounds.length + 1;
       await decoProgram.createGrantRound(nextId);
+      // Save rich metadata locally
+      const meta: GrantMeta = {
+        name: submitName,
+        desc: submitDesc,
+        founder: submitFounder,
+        twitter: submitTwitter,
+        gitRepo: submitGitRepo,
+        imageUrl: submitImageUrl,
+        walletAddress: submitPubkey,
+      };
+      saveMeta(nextId, meta);
+      setGrantMeta(loadAllMeta());
       showToast('✅ Grant round created for ' + submitName + ' (Round #' + nextId + ')');
       setSubmitName(''); setSubmitDesc(''); setSubmitPubkey('');
       setSubmitGitRepo(''); setSubmitFounder(''); setSubmitTwitter('');
@@ -365,7 +449,7 @@ const App: React.FC = () => {
       setGrantRounds(rounds as GrantRoundData[]);
     } catch (e: any) { showToast('❌ Submission failed: ' + e.message); }
     finally { setLoading(null); }
-  }, [connected, decoProgram, grantRounds, submitName, submitPubkey, showToast]);
+  }, [connected, decoProgram, grantRounds, submitName, submitPubkey, submitDesc, submitFounder, submitTwitter, submitGitRepo, submitImageUrl, showToast]);
 
   const displayRounds: GrantRoundData[] = grantRounds.length > 0 ? grantRounds : [
     { pubkey: null, roundId: { toNumber: () => 1 }, isActive: true, winner: null },
@@ -432,6 +516,7 @@ const App: React.FC = () => {
           onVote={handleCastVote}
           onBack={() => navigate('home')}
           myVotes={myVotes}
+          grantMeta={grantMeta}
         />
         {toast && <TxToast msg={toast} onClose={() => setToast(null)} />}
       </div>
@@ -510,23 +595,35 @@ const App: React.FC = () => {
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {displayRounds.slice(0, 2).map((round, idx) => {
+              {displayRounds.slice(0, 2).map((round) => {
                 const roundId = round.roundId.toNumber();
                 const alreadyVoted = votedRounds[roundId] ?? false;
+                const meta = grantMeta[roundId];
                 return (
-                  <div key={roundId} className="bg-stone-50 rounded-2xl border border-stone-200 p-8 flex flex-col gap-4 hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('grants')}>
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-serif text-2xl text-stone-900">Round #{roundId}</h3>
-                      <span className={`text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${round.isActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-stone-100 text-stone-400'}`}>
-                        {round.isActive ? '● Active' : 'Closed'}
-                      </span>
-                    </div>
-                    <p className="text-stone-500 text-sm">🔒 Cap table shielded inside MagicBlock TEE</p>
-                    <div className="flex gap-3 mt-2">
-                      {alreadyVoted
-                        ? <span className="flex items-center gap-2 text-emerald-600 text-sm font-bold"><CheckCircle size={14} /> Voted</span>
-                        : <span className="text-sm font-bold uppercase tracking-widest" style={{ color: GOLD }}>Cast Vote →</span>
-                      }
+                  <div key={roundId} className="bg-stone-50 rounded-2xl border border-stone-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('grants')}>
+                    {meta?.imageUrl && (
+                      <div className="w-full overflow-hidden" style={{ height: '120px' }}>
+                        <img src={meta.imageUrl} alt={meta.name} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="p-8 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-0.5">Round #{roundId}</div>
+                          <h3 className="font-serif text-2xl text-stone-900">{meta?.name || 'Unnamed Project'}</h3>
+                        </div>
+                        <span className={`text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${round.isActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-stone-100 text-stone-400'}`}>
+                          {round.isActive ? '● Active' : 'Closed'}
+                        </span>
+                      </div>
+                      {meta?.founder && <p className="text-stone-500 text-sm">👤 {meta.founder}{meta.twitter ? ` · @${meta.twitter}` : ''}</p>}
+                      <p className="text-stone-500 text-sm">🔒 Cap table shielded inside MagicBlock TEE</p>
+                      <div className="flex gap-3 mt-1">
+                        {alreadyVoted
+                          ? <span className="flex items-center gap-2 text-emerald-600 text-sm font-bold"><CheckCircle size={14} /> Voted</span>
+                          : <span className="text-sm font-bold uppercase tracking-widest" style={{ color: GOLD }}>Cast Vote →</span>
+                        }
+                      </div>
                     </div>
                   </div>
                 );
