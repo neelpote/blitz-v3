@@ -2,21 +2,17 @@ import { useCallback, useMemo } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { AnchorProvider, Program, BN, web3 } from '@coral-xyz/anchor';
-// Use the raw generated IDL — Anchor v0.30 reads program address from IDL.address
 import IDL_JSON from '../idl/deco_private.json';
 
-export const PROGRAM_ID        = "4TocTt21C8CYTGCjP7BgynrL8kQSn2zTHbMhSyB5hivX";
-export const DELEGATION_PROGRAM = "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh";
-// Magic Router — single endpoint, auto-routes to ER or base chain
-export const MAGIC_ROUTER_RPC  = "https://devnet-router.magicblock.app";
+export const PROGRAM_ID         = '4TocTt21C8CYTGCjP7BgynrL8kQSn2zTHbMhSyB5hivX';
+export const DELEGATION_PROGRAM = 'DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh';
+export const MAGIC_ROUTER_RPC   = 'https://devnet-router.magicblock.app';
 
-const MAGIC_ROUTER_WS      = 'wss://devnet-router.magicblock.app';
+const MAGIC_ROUTER_WS       = 'wss://devnet-router.magicblock.app';
 const DELEGATION_PROGRAM_ID = new PublicKey(DELEGATION_PROGRAM);
 const GRANT_ROUND_SEED      = Buffer.from('grant_round');
 const MEMBER_VOTE_SEED      = Buffer.from('member_vote');
 const programId             = new PublicKey(PROGRAM_ID);
-
-// ── PDA helpers ──────────────────────────────────────────────────────────────
 
 export function getGrantRoundPda(roundId: number): PublicKey {
   const buf = Buffer.alloc(8);
@@ -40,8 +36,6 @@ function getDelegationPdas(accountPda: PublicKey) {
   return { bufferPda, delegationRecordPda, delegationMetadataPda };
 }
 
-// ── Hook ─────────────────────────────────────────────────────────────────────
-
 export function useDecoProgram() {
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -64,25 +58,16 @@ export function useDecoProgram() {
     }
   }, [connection, wallet.publicKey, wallet.signTransaction]);
 
-  // Anchor v0.30: pass only (IDL, provider) — program address comes from IDL.address
   const baseProgram = useMemo(() => {
     if (!baseProvider) return null;
-    try {
-      return new Program(IDL_JSON as any, baseProvider);
-    } catch (e) {
-      console.error('baseProgram init failed:', e);
-      return null;
-    }
+    try { return new Program(IDL_JSON as any, baseProvider); }
+    catch (e) { console.error('baseProgram init failed:', e); return null; }
   }, [baseProvider]);
 
   const routerProgram = useMemo(() => {
     if (!routerProvider) return null;
-    try {
-      return new Program(IDL_JSON as any, routerProvider);
-    } catch (e) {
-      console.error('routerProgram init failed:', e);
-      return null;
-    }
+    try { return new Program(IDL_JSON as any, routerProvider); }
+    catch (e) { console.error('routerProgram init failed:', e); return null; }
   }, [routerProvider]);
 
   const createGrantRound = useCallback(async (roundId: number) => {
@@ -92,44 +77,67 @@ export function useDecoProgram() {
       .createGrantRound(new BN(roundId))
       .accounts({ grantRound: pda, authority: wallet.publicKey, systemProgram: SystemProgram.programId })
       .rpc();
-    console.log('✅ Grant round created:', tx);
+    console.log('createGrantRound tx:', tx);
     return tx;
   }, [baseProgram, wallet.publicKey]);
-
-  const delegatePda = useCallback(async (accountPda: PublicKey, accountType: any) => {
-    if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
-    const { bufferPda, delegationRecordPda, delegationMetadataPda } = getDelegationPdas(accountPda);
-    const tx = await (baseProgram.methods as any)
-      .delegatePda(accountType)
-      .accounts({
-        bufferPda, delegationRecordPda, delegationMetadataPda,
-        pda: accountPda, payer: wallet.publicKey, validator: null,
-        ownerProgram: programId, delegationProgram: DELEGATION_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-    console.log('✅ PDA delegated:', tx);
-    return tx;
-  }, [baseProgram, wallet.publicKey]);
-
-  const delegateGrantRound = useCallback(async (roundId: number) => {
-    return delegatePda(getGrantRoundPda(roundId), { grantRound: { roundId: new BN(roundId) } });
-  }, [delegatePda]);
-
-  const delegateMemberVote = useCallback(async (roundId: number) => {
-    if (!wallet.publicKey) throw new Error('Wallet not connected');
-    const pda = getMemberVotePda(roundId, wallet.publicKey);
-    return delegatePda(pda, { memberVote: { roundId: new BN(roundId), voter: wallet.publicKey } });
-  }, [delegatePda, wallet.publicKey]);
 
   const initMemberVote = useCallback(async (roundId: number) => {
     if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
     const pda = getMemberVotePda(roundId, wallet.publicKey);
+    try {
+      await (baseProgram.account as any).memberVote.fetch(pda);
+      console.log('MemberVote already exists, skipping init');
+      return null;
+    } catch { /* not found, proceed */ }
     const tx = await (baseProgram.methods as any)
       .initMemberVote(new BN(roundId))
       .accounts({ memberVote: pda, voter: wallet.publicKey, systemProgram: SystemProgram.programId })
       .rpc();
-    console.log('✅ MemberVote initialized:', tx);
+    console.log('initMemberVote tx:', tx);
+    return tx;
+  }, [baseProgram, wallet.publicKey]);
+
+  const delegateMemberVote = useCallback(async (roundId: number) => {
+    if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
+    const pda = getMemberVotePda(roundId, wallet.publicKey);
+    const { bufferPda, delegationRecordPda, delegationMetadataPda } = getDelegationPdas(pda);
+    const tx = await (baseProgram.methods as any)
+      .delegateMemberVote(new BN(roundId))
+      .accounts({
+        pda,
+        payer: wallet.publicKey,
+        validator: null,
+        ownerProgram: programId,
+        bufferPda,
+        delegationRecordPda,
+        delegationMetadataPda,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log('delegateMemberVote tx:', tx);
+    return tx;
+  }, [baseProgram, wallet.publicKey]);
+
+  const delegateGrantRound = useCallback(async (roundId: number) => {
+    if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
+    const pda = getGrantRoundPda(roundId);
+    const { bufferPda, delegationRecordPda, delegationMetadataPda } = getDelegationPdas(pda);
+    const tx = await (baseProgram.methods as any)
+      .delegateGrantRound(new BN(roundId))
+      .accounts({
+        pda,
+        payer: wallet.publicKey,
+        validator: null,
+        ownerProgram: programId,
+        bufferPda,
+        delegationRecordPda,
+        delegationMetadataPda,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log('delegateGrantRound tx:', tx);
     return tx;
   }, [baseProgram, wallet.publicKey]);
 
@@ -140,7 +148,7 @@ export function useDecoProgram() {
       .castVote(new BN(roundId), projectPubkey)
       .accounts({ memberVote: pda, voter: wallet.publicKey })
       .rpc();
-    console.log('✅ Vote cast via Magic Router:', tx);
+    console.log('castVote tx (via Magic Router):', tx);
     return tx;
   }, [routerProgram, wallet.publicKey]);
 
@@ -175,8 +183,9 @@ export function useDecoProgram() {
   const hasVoted = useCallback(async (roundId: number): Promise<boolean> => {
     if (!baseProgram || !wallet.publicKey) return false;
     try {
-      await (baseProgram.account as any).memberVote.fetch(getMemberVotePda(roundId, wallet.publicKey));
-      return true;
+      const pda = getMemberVotePda(roundId, wallet.publicKey);
+      const vote = await (baseProgram.account as any).memberVote.fetch(pda);
+      return vote.votedFor !== null;
     } catch { return false; }
   }, [baseProgram, wallet.publicKey]);
 
@@ -184,9 +193,9 @@ export function useDecoProgram() {
     connected: !!wallet.publicKey,
     publicKey: wallet.publicKey,
     createGrantRound,
+    initMemberVote,
     delegateGrantRound,
     delegateMemberVote,
-    initMemberVote,
     castVote,
     fetchAllGrantRounds,
     fetchMyVotes,

@@ -24,7 +24,7 @@ pub mod deco_private {
         Ok(())
     }
 
-    /// Initialize a member_vote PDA on base chain so it can be delegated to the ER
+    /// Initialize a MemberVote PDA on base chain (must exist before delegation)
     pub fn init_member_vote(ctx: Context<InitMemberVote>, round_id: u64) -> Result<()> {
         let vote = &mut ctx.accounts.member_vote;
         vote.round_id = round_id;
@@ -34,8 +34,7 @@ pub mod deco_private {
         Ok(())
     }
 
-    /// Cast a private vote — runs on Ephemeral Rollup (TEE)
-    /// member_vote must already exist and be delegated before calling this
+    /// Cast a private vote — runs on Ephemeral Rollup via Magic Router
     pub fn cast_vote(
         ctx: Context<CastVote>,
         _round_id: u64,
@@ -48,7 +47,7 @@ pub mod deco_private {
         Ok(())
     }
 
-    /// Commit vote state from ER back to base chain and undelegate
+    /// Commit vote from ER back to base chain and undelegate
     pub fn commit_vote(ctx: Context<CommitVote>) -> Result<()> {
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
@@ -59,12 +58,25 @@ pub mod deco_private {
         Ok(())
     }
 
-    /// Delegate a grant round PDA to the MagicBlock TEE
-    pub fn delegate_pda(ctx: Context<DelegatePda>) -> Result<()> {
-        let round_id = ctx.accounts.grant_round_ref.round_id;
+    /// Delegate a GrantRound PDA to the MagicBlock ER
+    pub fn delegate_grant_round(ctx: Context<DelegateGrantRound>, round_id: u64) -> Result<()> {
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
             &[GRANT_ROUND_SEED, &round_id.to_le_bytes()],
+            DelegateConfig {
+                validator: ctx.accounts.validator.as_ref().map(|v| v.key()),
+                ..Default::default()
+            },
+        )?;
+        Ok(())
+    }
+
+    /// Delegate a MemberVote PDA to the MagicBlock ER
+    pub fn delegate_member_vote(ctx: Context<DelegateMemberVote>, round_id: u64) -> Result<()> {
+        let voter = ctx.accounts.payer.key();
+        ctx.accounts.delegate_pda(
+            &ctx.accounts.payer,
+            &[MEMBER_VOTE_SEED, &round_id.to_le_bytes(), voter.as_ref()],
             DelegateConfig {
                 validator: ctx.accounts.validator.as_ref().map(|v| v.key()),
                 ..Default::default()
@@ -131,14 +143,25 @@ pub struct CommitVote<'info> {
 
 #[delegate]
 #[derive(Accounts)]
-pub struct DelegatePda<'info> {
-    /// CHECK: The grant round PDA to delegate
+#[instruction(round_id: u64)]
+pub struct DelegateGrantRound<'info> {
+    /// CHECK: GrantRound PDA to delegate
     #[account(mut, del)]
     pub pda: AccountInfo<'info>,
-    /// Used to read round_id for seed derivation
-    pub grant_round_ref: Account<'info, GrantRound>,
     pub payer: Signer<'info>,
-    /// CHECK: Optional specific ER validator
+    /// CHECK: Optional ER validator
+    pub validator: Option<AccountInfo<'info>>,
+}
+
+#[delegate]
+#[derive(Accounts)]
+#[instruction(round_id: u64)]
+pub struct DelegateMemberVote<'info> {
+    /// CHECK: MemberVote PDA to delegate
+    #[account(mut, del)]
+    pub pda: AccountInfo<'info>,
+    pub payer: Signer<'info>,
+    /// CHECK: Optional ER validator
     pub validator: Option<AccountInfo<'info>>,
 }
 

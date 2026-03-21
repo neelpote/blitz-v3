@@ -330,7 +330,11 @@ const App: React.FC = () => {
     if (votedRounds[roundId]) { showToast('You already voted in this round.'); return; }
     setLoading('vote-' + roundId);
     try {
+      // Step 1: create MemberVote PDA on base chain (idempotent — skips if exists)
+      await decoProgram.initMemberVote(roundId);
+      // Step 2: delegate MemberVote PDA to MagicBlock ER
       await decoProgram.delegateMemberVote(roundId);
+      // Step 3: cast vote via Magic Router (routes to ER)
       await decoProgram.castVote(roundId, new PublicKey(projectPubkeyStr));
       showToast('✅ Private vote cast for ' + name + ' — shielded inside MagicBlock TEE.');
       setVotedRounds(prev => ({ ...prev, [roundId]: true }));
