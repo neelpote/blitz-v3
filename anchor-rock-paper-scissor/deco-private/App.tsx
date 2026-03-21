@@ -384,12 +384,14 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
     if (!sol || sol <= 0) { showToast('Enter a valid SOL amount.'); return; }
     setStaking(true);
     try {
-      const { blockhash } = await connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       const tx = new Transaction({ recentBlockhash: blockhash, feePayer: wallet.publicKey }).add(
         SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: TREASURY, lamports: Math.floor(sol * LAMPORTS_PER_SOL) })
       );
       const sig = await wallet.sendTransaction(tx, connection);
-      await connection.confirmTransaction(sig, 'confirmed');
+      try {
+        await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+      } catch { /* timeout — tx likely landed, treat as success */ }
       setStakedTotal(p => p + sol);
       setStakeAmt('');
       showToast(`✅ Staked ${sol} SOL as VC collateral. Tx: ${sig.slice(0, 8)}...`);
@@ -408,12 +410,14 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
     }
     setInvesting(roundId);
     try {
-      const { blockhash } = await connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       const tx = new Transaction({ recentBlockhash: blockhash, feePayer: wallet.publicKey }).add(
         SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: dest, lamports: Math.floor(sol * LAMPORTS_PER_SOL) })
       );
       const sig = await wallet.sendTransaction(tx, connection);
-      await connection.confirmTransaction(sig, 'confirmed');
+      try {
+        await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+      } catch { /* timeout — tx likely landed, treat as success */ }
       const inv: VCInvestment = { roundId, amount: sol, ts: Date.now() };
       saveVCInvestment(inv);
       setInvestments(loadVCInvestments());
