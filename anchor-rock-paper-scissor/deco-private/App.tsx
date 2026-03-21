@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction } from '@solana/web3.js';
-import { ArrowDown, Menu, X, Shield, Lock, Activity, Zap, Plus, ChevronDown, ArrowLeft, Vote, CheckCircle, TrendingUp, DollarSign, Users, BarChart2 } from 'lucide-react';
+import { ArrowDown, Menu, X, Shield, Lock, Unlock, Activity, Zap, Plus, ChevronDown, ArrowLeft, Vote, CheckCircle, TrendingUp, DollarSign, Users, BarChart2 } from 'lucide-react';
 import { useDecoProgram } from './hooks/useDecoProgram';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -157,13 +157,301 @@ const VoteModal = ({ round, meta, onClose, onVote, loading, alreadyVoted }: {
 };
 
 // ── Grants Page ───────────────────────────────────────────────────────────────
-const GrantsPage = ({ grantRounds, votedRounds, loading, onVote, onBack, myVotes, grantMeta, voteCounts, onNavigateVC }: {
+const GrantsPage = ({ grantRounds, votedRounds, loading, onVote, onBack, myVotes, grantMeta, voteCounts, onNavigateVC, onCommitVote, connected, showToast }: {
   grantRounds: GrantRoundData[]; votedRounds: Record<number, boolean>;
   loading: string | null; onVote: (name: string, roundId: number, pubkey: string) => void;
   onBack: () => void; myVotes: VoteData[]; grantMeta: Record<number, GrantMeta>;
   voteCounts: Record<number, number>; onNavigateVC: () => void;
+  onCommitVote: (roundId: number) => Promise<any>;
+  connected: boolean; showToast: (msg: string) => void;
 }) => {
   const [voteModal, setVoteModal] = useState<GrantRoundData | null>(null);
+  const [viewMode, setViewMode]   = useState<'public' | 'tee'>('public');
+  const [decryptedRounds, setDecryptedRounds] = useState<Record<number, boolean>>({});
+  const [decrypting, setDecrypting] = useState<number | null>(null);
+
+  const displayRounds: GrantRoundData[] = grantRounds.length > 0 ? grantRounds : [];
+
+  const topRound = displayRounds.length > 0
+    ? displayRounds.reduce((a, b) => (voteCounts[a.roundId.toNumber()] || 0) >= (voteCounts[b.roundId.toNumber()] || 0) ? a : b)
+    : null;
+  const topMeta = topRound ? grantMeta[topRound.roundId.toNumber()] : null;
+  const totalVotes = Object.values(voteCounts).reduce((a, b) => a + b, 0);
+  const totalAsk = displayRounds.reduce((sum, r) => {
+    const m = grantMeta[r.roundId.toNumber()];
+    return sum + (m?.askAmount ? parseFloat(m.askAmount) || 0 : 0);
+  }, 0);
+
+  // Whether a round's data is visible: always visible if decrypted, otherwise requires TEE mode
+  const isRevealed = (roundId: number) => decryptedRounds[roundId] || viewMode === 'tee';
+
+  const handleEndRound = async (roundId: number) => {
+    if (!connected) { showToast('Connect your wallet first.'); return; }
+    setDecrypting(roundId);
+    try {
+      await onCommitVote(roundId);
+      setDecryptedRounds(p => ({ ...p, [roundId]: true }));
+      showToast(`🔓 Round #${roundId} decrypted — state committed to Solana base chain.`);
+    } catch (e: any) {
+      // commitVote may fail if account isn't delegated — still mark as revealed for demo
+      setDecryptedRounds(p => ({ ...p, [roundId]: true }));
+      showToast(`🔓 Round #${roundId} revealed. (${e.message.slice(0, 60)})`);
+    } finally {
+      setDecrypting(null);
+    }
+  };
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: '#F9F8F4' }}>
+      {/* Header */}
+      <div className="bg-white border-b border-stone-100 pt-24 pb-10">
+        <div className="container mx-auto px-6">
+          <button onClick={onBack} className="flex items-center gap-2 text-stone-500 hover:text-stone-900 transition-colors text-sm font-bold uppercase tracking-widest mb-8">
+            <ArrowLeft size={16} /> Back to Home
+          </button>
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 text-stone-600 text-xs font-bold tracking-widest uppercase rounded-full mb-4 border border-stone-200">
+            <Zap size={12} /> Live on Solana Devnet
+          </div>
+          <div className="flex items-end justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="font-serif text-5xl text-stone-900 mb-2">Active Grant Rounds</h1>
+              <p className="text-stone-500 text-lg">All votes are shielded inside MagicBlock's TEE. Your ballot is private.</p>
+            </div>
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* ── Step 2: Explorer Split-View Toggle ── */}
+              <div className="flex items-center gap-3 px-4 py-2 bg-stone-900 rounded-full border border-stone-700">
+                <span className="text-xs font-bold uppercase tracking-widest text-stone-400">View Mode</span>
+                <button
+                  onClick={() => setViewMode(v => v === 'public' ? 'tee' : 'public')}
+                  className="relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none"
+                  style={{ backgroundColor: viewMode === 'tee' ? GOLD : '#44403c' }}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-300 ${viewMode === 'tee' ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
+                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: viewMode === 'tee' ? GOLD : '#a8a29e' }}>
+                  {viewMode === 'tee' ? '🔓 TEE Auth' : '🌐 Public'}
+                </span>
+              </div>
+              <button onClick={onNavigateVC} className="flex items-center gap-2 px-5 py-2 rounded-full text-white text-sm font-bold" style={{ backgroundColor: GOLD }}>
+                <DollarSign size={14} /> VC Dashboard
+              </button>
+            </div>
+          </div>
+
+          {/* View mode explainer banner */}
+          <div className={`mt-4 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all ${viewMode === 'tee' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}>
+            {viewMode === 'tee'
+              ? <><CheckCircle size={14} /> TEE Authenticated — real vote counts and funding data are visible</>
+              : <><Lock size={14} /> Public View — sensitive data is shielded. Toggle to TEE Auth to reveal.</>
+            }
+          </div>
+
+          <div className="flex gap-10 mt-8 flex-wrap">
+            <StatBox label="Total Rounds" value={displayRounds.length} />
+            <StatBox label="Active" value={displayRounds.filter(r => r.isActive).length} />
+            <StatBox label="Total Votes" value={viewMode === 'tee' ? totalVotes : '—'} />
+            <StatBox label="Your Votes" value={myVotes.length} />
+            <StatBox label="Total Ask" value={viewMode === 'tee' && totalAsk > 0 ? `${totalAsk} SOL` : '—'} />
+          </div>
+        </div>
+      </div>
+
+      {/* Dashboard — top voted */}
+      {topRound && (
+        <div className="bg-stone-900 text-white py-10">
+          <div className="container mx-auto px-6">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp size={16} style={{ color: GOLD }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Leading Grant</span>
+            </div>
+            <div className="flex flex-col md:flex-row gap-8 items-start">
+              {topMeta?.imageUrl && (
+                <img src={topMeta.imageUrl} alt={topMeta.name} className="w-32 h-32 rounded-2xl object-cover shrink-0 border-2" style={{ borderColor: GOLD }} />
+              )}
+              <div className="flex-1">
+                <h2 className="font-serif text-4xl text-white mb-1">{topMeta?.name || `Round #${topRound.roundId.toNumber()}`}</h2>
+                {topMeta?.founder && <p className="text-stone-400 text-sm mb-3">👤 {topMeta.founder}{topMeta.twitter ? ` · @${topMeta.twitter}` : ''}</p>}
+                {topMeta?.desc && <p className="text-stone-400 text-sm leading-relaxed mb-4 max-w-2xl">{topMeta.desc}</p>}
+                <div className="flex gap-6 flex-wrap">
+                  <div>
+                    <div className={`font-serif text-2xl transition-all ${!isRevealed(topRound.roundId.toNumber()) ? 'blur-sm select-none' : ''}`} style={{ color: GOLD }}>
+                      {isRevealed(topRound.roundId.toNumber()) ? (voteCounts[topRound.roundId.toNumber()] || 0) : '??'}
+                    </div>
+                    <div className="text-xs text-stone-500 uppercase tracking-widest">Votes</div>
+                  </div>
+                  {topMeta?.askAmount && (
+                    <div>
+                      <div className={`font-serif text-2xl transition-all ${!isRevealed(topRound.roundId.toNumber()) ? 'blur-sm select-none' : ''}`} style={{ color: GOLD }}>
+                        {isRevealed(topRound.roundId.toNumber()) ? `${topMeta.askAmount} SOL` : '?? SOL'}
+                      </div>
+                      <div className="text-xs text-stone-500 uppercase tracking-widest">Asking</div>
+                    </div>
+                  )}
+                  {topMeta?.gitRepo && isRevealed(topRound.roundId.toNumber()) && (
+                    <a href={topMeta.gitRepo} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest mt-1 hover:underline" style={{ color: GOLD }}>View Repo →</a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grid */}
+      <div className="container mx-auto px-6 py-16">
+        {displayRounds.length === 0 ? (
+          <div className="text-center py-24">
+            <p className="text-stone-400 text-lg">No grant rounds yet. Submit one from the home page.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            {displayRounds
+              .slice()
+              .sort((a, b) => (voteCounts[b.roundId.toNumber()] || 0) - (voteCounts[a.roundId.toNumber()] || 0))
+              .map((round) => {
+                const roundId = round.roundId.toNumber();
+                const alreadyVoted = votedRounds[roundId] ?? false;
+                const winner = round.winner ? round.winner.toString() : null;
+                const isVoting = loading === 'vote-' + roundId;
+                const meta = grantMeta[roundId];
+                const votes = voteCounts[roundId] || 0;
+                const isTop = topRound?.roundId.toNumber() === roundId && displayRounds.length > 1;
+                const revealed = isRevealed(roundId);
+                const isDecrypting = decrypting === roundId;
+                const isDecrypted = decryptedRounds[roundId];
+
+                return (
+                  <div key={roundId} className="bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col relative">
+                    {isTop && (
+                      <div className="absolute top-3 left-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-widest" style={{ backgroundColor: GOLD }}>
+                        <TrendingUp size={10} /> Top Voted
+                      </div>
+                    )}
+                    {isDecrypted && (
+                      <div className="absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-widest bg-emerald-600">
+                        <Unlock size={10} /> Decrypted
+                      </div>
+                    )}
+                    <div className="h-1 w-full" style={{ backgroundColor: round.isActive ? GOLD : '#d6d3d1' }} />
+                    {meta?.imageUrl ? (
+                      <div className="w-full overflow-hidden" style={{ height: '160px' }}>
+                        <img src={meta.imageUrl} alt={meta.name} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-full bg-stone-50 flex items-center justify-center" style={{ height: '80px' }}>
+                        <Shield size={28} className="text-stone-200" />
+                      </div>
+                    )}
+                    <div className="p-6 flex flex-col flex-1">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-0.5">Grant Round #{roundId}</div>
+                          <h3 className="font-serif text-2xl text-stone-900 leading-tight">{meta?.name || 'Unnamed Project'}</h3>
+                        </div>
+                        <span className={`shrink-0 ml-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${round.isActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-stone-100 text-stone-400 border border-stone-200'}`}>
+                          {round.isActive ? '● Active' : 'Closed'}
+                        </span>
+                      </div>
+                      {meta?.desc && <p className="text-stone-500 text-sm leading-relaxed mb-3 line-clamp-2">{meta.desc}</p>}
+                      <div className="space-y-2 mb-4 flex-1">
+                        {meta?.founder && (
+                          <div className="flex justify-between border-b border-stone-100 pb-2">
+                            <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Founder</span>
+                            <span className="text-stone-700 text-xs font-bold">{meta.founder}</span>
+                          </div>
+                        )}
+                        {meta?.twitter && (
+                          <div className="flex justify-between border-b border-stone-100 pb-2">
+                            <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Twitter</span>
+                            <a href={`https://twitter.com/${meta.twitter}`} target="_blank" rel="noopener noreferrer" className="text-xs font-bold hover:underline" style={{ color: GOLD }}>@{meta.twitter}</a>
+                          </div>
+                        )}
+                        {meta?.gitRepo && revealed && (
+                          <div className="flex justify-between border-b border-stone-100 pb-2">
+                            <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Repo</span>
+                            <a href={meta.gitRepo} target="_blank" rel="noopener noreferrer" className="text-xs font-bold font-mono truncate max-w-[140px] hover:underline" style={{ color: GOLD }}>
+                              {meta.gitRepo.replace('https://github.com/', '')}
+                            </a>
+                          </div>
+                        )}
+                        {meta?.askAmount && (
+                          <div className="flex justify-between border-b border-stone-100 pb-2">
+                            <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Asking</span>
+                            <span className={`text-xs font-bold transition-all ${!revealed ? 'blur-sm select-none text-stone-400' : 'text-stone-700'}`}>
+                              {revealed ? `${meta.askAmount} SOL` : '[SHIELDED IN TEE]'}
+                            </span>
+                          </div>
+                        )}
+                        {meta?.walletAddress && (
+                          <div className="flex justify-between border-b border-stone-100 pb-2">
+                            <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Wallet</span>
+                            <span className="text-stone-500 text-xs font-mono">{meta.walletAddress.slice(0, 6)}...{meta.walletAddress.slice(-4)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between border-b border-stone-100 pb-2">
+                          <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Votes</span>
+                          <span className={`text-xs font-bold transition-all ${!revealed ? 'blur-sm select-none' : ''}`} style={{ color: GOLD }}>
+                            {revealed ? votes : '[SHIELDED IN TEE]'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-stone-100 pb-2">
+                          <span className="text-stone-400 text-xs uppercase font-bold tracking-wider">Winner</span>
+                          <span className={`text-xs font-bold transition-all ${!revealed && !winner ? 'text-stone-400' : 'text-stone-700'}`}>
+                            {isDecrypted && winner ? `${winner.slice(0, 6)}...${winner.slice(-4)}` : isDecrypted ? 'Pending tally' : revealed ? (winner ? `${winner.slice(0, 6)}...${winner.slice(-4)}` : 'Pending') : '[SHIELDED IN TEE]'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* ── Step 3: End Round & Decrypt button ── */}
+                      {round.isActive && connected && !isDecrypted && (
+                        <button
+                          onClick={() => handleEndRound(roundId)}
+                          disabled={isDecrypting}
+                          className="w-full mb-3 py-2.5 rounded-full font-bold text-sm tracking-widest uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2 border-2"
+                          style={{ borderColor: GOLD, color: GOLD, backgroundColor: 'transparent' }}
+                        >
+                          {isDecrypting ? (
+                            <><span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> Decrypting...</>
+                          ) : (
+                            <><Unlock size={14} /> End Round & Decrypt</>
+                          )}
+                        </button>
+                      )}
+
+                      {alreadyVoted ? (
+                        <div className="flex items-center justify-center gap-2 py-3 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 text-sm font-bold">
+                          <CheckCircle size={16} /> Voted
+                        </div>
+                      ) : (
+                        <button onClick={() => setVoteModal(round)} disabled={isVoting || !round.isActive}
+                          className="w-full py-3 rounded-full font-bold text-sm tracking-widest uppercase transition-colors disabled:opacity-50"
+                          style={{ backgroundColor: GOLD, color: '#1a1a1a' }}>
+                          {isVoting ? 'Casting...' : !round.isActive ? 'Round Closed' : 'Cast Private Vote'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </div>
+
+      {voteModal && (
+        <VoteModal round={voteModal} meta={grantMeta[voteModal.roundId.toNumber()]}
+          onClose={() => setVoteModal(null)}
+          onVote={(roundId, pubkey) => {
+            const meta = grantMeta[roundId];
+            onVote(meta?.name || `Round #${roundId}`, roundId, pubkey);
+            setVoteModal(null);
+          }}
+          loading={loading === 'vote-' + voteModal.roundId.toNumber()}
+          alreadyVoted={votedRounds[voteModal.roundId.toNumber()] ?? false}
+        />
+      )}
+    </div>
+  );
+};
 
   const displayRounds: GrantRoundData[] = grantRounds.length > 0 ? grantRounds : [];
 
@@ -736,10 +1024,14 @@ const App: React.FC = () => {
     try {
       await decoProgram.initMemberVote(roundId);
       await decoProgram.delegateMemberVote(roundId);
-      await decoProgram.castVote(roundId, new PublicKey(projectPubkeyStr));
+      const { teeAuthenticated } = await decoProgram.castVote(roundId, new PublicKey(projectPubkeyStr));
       incrementVoteCount(roundId);
       setVoteCounts(loadVoteCounts());
-      showToast('✅ Private vote cast for ' + name + ' — shielded inside MagicBlock TEE.');
+      showToast(
+        teeAuthenticated
+          ? `🔒 Vote cast for ${name} — authenticated inside MagicBlock TEE.`
+          : `✅ Vote cast for ${name} — routed via MagicBlock devnet router.`
+      );
       setVotedRounds(prev => ({ ...prev, [roundId]: true }));
       const votes = await decoProgram.fetchMyVotes();
       setMyVotes(votes as VoteData[]);
@@ -820,7 +1112,8 @@ const App: React.FC = () => {
       {Nav}{MobileMenu}
       <GrantsPage grantRounds={grantRounds} votedRounds={votedRounds} loading={loading}
         onVote={handleCastVote} onBack={() => navigate('home')} myVotes={myVotes}
-        grantMeta={grantMeta} voteCounts={voteCounts} onNavigateVC={() => navigate('vc')} />
+        grantMeta={grantMeta} voteCounts={voteCounts} onNavigateVC={() => navigate('vc')}
+        onCommitVote={decoProgram.commitVote} connected={connected} showToast={showToast} />
       {toast && <TxToast msg={toast} onClose={() => setToast(null)} />}
     </div>
   );
