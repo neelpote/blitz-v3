@@ -847,10 +847,10 @@ const App: React.FC = () => {
           </div>
           <h1 className="font-serif text-5xl md:text-7xl lg:text-9xl font-medium leading-tight mb-8 text-stone-900">
             Deco Private<br />
-            <span className="italic font-normal text-stone-600 text-3xl md:text-5xl block mt-4">Shielded Startup Accelerator</span>
+            <span className="italic font-normal text-stone-600 text-3xl md:text-5xl block mt-4">On-chain Grant Accelerator</span>
           </h1>
           <p className="max-w-2xl mx-auto text-lg md:text-xl text-stone-700 font-light leading-relaxed mb-12">
-            The first decentralized accelerator powered by Private Ephemeral Rollups. Shield your cap table, cast private votes, and scale in the shadows.
+            Founders submit their startups for a grant round. Members vote privately on who deserves funding. VCs invest directly into the winners — all on Solana, all on-chain.
           </p>
           <div className="flex justify-center gap-4 flex-wrap">
             <button onClick={() => navigate('grants')} className="px-8 py-4 rounded-full font-bold uppercase tracking-widest text-sm shadow-sm" style={{ backgroundColor: GOLD, color: '#1a1a1a' }}>
@@ -876,8 +876,8 @@ const App: React.FC = () => {
               <div className="w-16 h-1 mb-6" style={{ backgroundColor: GOLD }}></div>
             </div>
             <div className="md:col-span-8 text-lg text-stone-600 leading-relaxed space-y-6">
-              <p><span className="text-5xl float-left mr-3 font-serif" style={{ color: GOLD }}>D</span>eco Private leverages MagicBlock's <strong>Private Ephemeral Rollups (PERs)</strong> to create a shielded environment for startup acceleration.</p>
-              <p>By utilizing Trusted Execution Environments (TEEs), we ensure that sensitive data is processed off-chain in a verifiable, private manner before settling back to Solana. This is the future of <strong>Shielded Governance</strong>.</p>
+              <p><span className="text-5xl float-left mr-3 font-serif" style={{ color: GOLD }}>D</span>eco Private is a grant accelerator built on Solana. Founders apply for funding, community members vote on the best projects, and VCs invest directly into the winning rounds.</p>
+              <p>Votes are cast privately inside a <strong>Trusted Execution Environment (TEE)</strong> — meaning no one can see how you voted or influence the outcome. Once voting closes, results settle back on-chain and funds flow directly to the project wallet. No middlemen, no bias, no leaks.</p>
             </div>
           </div>
           <div className="container mx-auto px-6 mt-16 flex flex-wrap justify-center gap-8">
@@ -1073,14 +1073,14 @@ const App: React.FC = () => {
         <section className="py-24" style={{ backgroundColor: '#F9F8F4' }}>
           <div className="container mx-auto px-6">
             <div className="max-w-4xl mx-auto text-center mb-16">
-              <h2 className="font-serif text-4xl md:text-6xl mb-6 text-stone-900">Shielded Infrastructure</h2>
-              <p className="text-xl text-stone-600 font-light">Powered by MagicBlock PERs and Intel SGX TEEs.</p>
+              <h2 className="font-serif text-4xl md:text-6xl mb-6 text-stone-900">How It Works</h2>
+              <p className="text-xl text-stone-600 font-light">Three steps from idea to funded.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                { icon: <Activity size={24} />, title: 'Real-time PERs', desc: 'Ephemeral rollups allow for sub-second private transactions that settle asynchronously to Solana.' },
-                { icon: <Lock size={24} />, title: 'TEE Verification', desc: 'Trusted Execution Environments ensure that even the rollup operators cannot see your private data.' },
-                { icon: <Shield size={24} />, title: 'Solana Settlement', desc: 'Final state transitions are compressed and anchored to Solana, inheriting its world-class security.' },
+                { icon: <Activity size={24} />, title: 'Submit a Grant', desc: 'Founders fill out a short application — project name, description, funding ask, and wallet address. It goes live on-chain immediately.' },
+                { icon: <Lock size={24} />, title: 'Private Voting', desc: 'Community members vote on which projects deserve funding. Votes are processed inside a TEE so no one can see your choice or game the result.' },
+                { icon: <Shield size={24} />, title: 'VC Investment', desc: 'VCs browse active rounds sorted by votes, stake SOL as collateral, and invest directly into project wallets — no escrow, no delays.' },
               ].map(c => (
                 <div key={c.title} className="p-10 bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow">
                   <div className="w-12 h-12 bg-stone-100 rounded-xl flex items-center justify-center text-stone-900 mb-6">{c.icon}</div>
