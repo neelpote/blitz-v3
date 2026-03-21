@@ -384,7 +384,8 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
     if (!sol || sol <= 0) { showToast('Enter a valid SOL amount.'); return; }
     setStaking(true);
     try {
-      const tx = new Transaction().add(
+      const { blockhash } = await connection.getLatestBlockhash();
+      const tx = new Transaction({ recentBlockhash: blockhash, feePayer: wallet.publicKey }).add(
         SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: TREASURY, lamports: Math.floor(sol * LAMPORTS_PER_SOL) })
       );
       const sig = await wallet.sendTransaction(tx, connection);
@@ -399,12 +400,16 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
   const handleInvest = async (roundId: number) => {
     if (!connected || !wallet.publicKey || !wallet.sendTransaction) { showToast('Connect your wallet first.'); return; }
     const sol = parseFloat(investAmt[roundId] || '');
-    if (!sol || sol <= 0) { showToast('Enter a valid investment amount.'); return; }
+    if (!sol || sol <= 0) { showToast('Enter an amount first.'); return; }
     const meta = grantMeta[roundId];
-    const dest = meta?.walletAddress ? new PublicKey(meta.walletAddress) : TREASURY;
+    let dest = TREASURY;
+    if (meta?.walletAddress) {
+      try { dest = new PublicKey(meta.walletAddress); } catch { /* invalid key, fall back to treasury */ }
+    }
     setInvesting(roundId);
     try {
-      const tx = new Transaction().add(
+      const { blockhash } = await connection.getLatestBlockhash();
+      const tx = new Transaction({ recentBlockhash: blockhash, feePayer: wallet.publicKey }).add(
         SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: dest, lamports: Math.floor(sol * LAMPORTS_PER_SOL) })
       );
       const sig = await wallet.sendTransaction(tx, connection);
@@ -544,7 +549,7 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
                           placeholder="SOL"
                           className="w-28 px-3 py-2 border border-stone-200 rounded-xl text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors text-sm" />
                       </div>
-                      <button onClick={() => handleInvest(roundId)} disabled={isInvesting || !round.isActive}
+                      <button onClick={() => handleInvest(roundId)} disabled={isInvesting || !connected}
                         className="px-5 py-2 rounded-xl font-bold text-sm uppercase tracking-widest transition-colors disabled:opacity-50"
                         style={{ backgroundColor: GOLD, color: '#1a1a1a' }}>
                         {isInvesting ? '...' : 'Invest'}
