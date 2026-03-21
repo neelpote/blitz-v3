@@ -44,7 +44,13 @@ interface GrantMeta {
 const STORAGE_KEY = 'deco_grant_meta';
 
 function loadAllMeta(): Record<number, GrantMeta> {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    // JSON keys are always strings — re-key as numbers
+    const result: Record<number, GrantMeta> = {};
+    for (const k of Object.keys(raw)) result[Number(k)] = raw[k];
+    return result;
+  }
   catch { return {}; }
 }
 function saveMeta(roundId: number, meta: GrantMeta) {
@@ -376,6 +382,8 @@ const App: React.FC = () => {
         for (const v of votes as VoteData[]) voted[v.roundId.toNumber()] = true;
         setVotedRounds(voted);
       } catch { /* chain not deployed yet */ }
+      // Always refresh metadata from localStorage
+      setGrantMeta(loadAllMeta());
     })();
   }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps
 
