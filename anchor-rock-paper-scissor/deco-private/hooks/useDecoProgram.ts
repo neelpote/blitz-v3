@@ -6,20 +6,13 @@ import {
   IDL,
   PROGRAM_ID,
   MAGIC_ROUTER_RPC,
-  MAGIC_PROGRAM,
-  MAGIC_CONTEXT,
   DELEGATION_PROGRAM,
-  PERMISSION_PROGRAM,
 } from '../idl/deco_private';
 
 // Magic Router: single endpoint — auto-routes to ER or Solana base chain
-// based on whether writable accounts are delegated or not.
 const MAGIC_ROUTER_WS = 'wss://devnet-router.magicblock.app';
 
 const DELEGATION_PROGRAM_ID = new PublicKey(DELEGATION_PROGRAM);
-const PERMISSION_PROGRAM_ID = new PublicKey(PERMISSION_PROGRAM);
-const MAGIC_PROGRAM_ID      = new PublicKey(MAGIC_PROGRAM);
-const MAGIC_CONTEXT_ID      = new PublicKey(MAGIC_CONTEXT);
 
 const GRANT_ROUND_SEED = Buffer.from('grant_round');
 const MEMBER_VOTE_SEED = Buffer.from('member_vote');
@@ -71,23 +64,27 @@ export function useDecoProgram() {
   // Magic Router provider — single endpoint that auto-routes to ER or base chain
   const routerProvider = useMemo(() => {
     if (!wallet.publicKey || !wallet.signTransaction) return null;
-    const routerConn = new web3.Connection(MAGIC_ROUTER_RPC, {
-      wsEndpoint: MAGIC_ROUTER_WS,
-      commitment: 'confirmed',
-    });
-    return new AnchorProvider(routerConn, wallet as any, { commitment: 'confirmed' });
-  }, [wallet.publicKey, wallet.signTransaction]);
+    try {
+      const routerConn = new web3.Connection(MAGIC_ROUTER_RPC, {
+        wsEndpoint: MAGIC_ROUTER_WS,
+        commitment: 'confirmed',
+      });
+      return new AnchorProvider(routerConn, wallet as any, { commitment: 'confirmed' });
+    } catch {
+      // Fall back to base connection if router is unavailable
+      return new AnchorProvider(connection, wallet as any, { commitment: 'confirmed' });
+    }
+  }, [connection, wallet.publicKey, wallet.signTransaction]);
 
-  const baseProgram = useMemo(
-    () => (baseProvider ? new Program(IDL as any, programId, baseProvider) : null),
-    [baseProvider],
-  );
+  const baseProgram = useMemo(() => {
+    if (!baseProvider) return null;
+    try { return new Program(IDL as any, programId, baseProvider); } catch { return null; }
+  }, [baseProvider]);
 
-  // Router program: used for castVote (ER when delegated) and tallyAndReveal
-  const routerProgram = useMemo(
-    () => (routerProvider ? new Program(IDL as any, programId, routerProvider) : null),
-    [routerProvider],
-  );
+  const routerProgram = useMemo(() => {
+    if (!routerProvider) return null;
+    try { return new Program(IDL as any, programId, routerProvider); } catch { return null; }
+  }, [routerProvider]);
 
   // ── createGrantRound — base chain ─────────────────────────────────────────
   const createGrantRound = useCallback(async (roundId: number) => {
