@@ -474,8 +474,9 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
 
   // Fetch on-chain SOL balance for every project wallet — reflects all investors
   const fetchBalances = useCallback(async () => {
+    if (displayRounds.length === 0) return;
     const result: Record<number, number> = {};
-    await Promise.all(
+    await Promise.allSettled(
       displayRounds.map(async (round) => {
         const roundId = round.roundId.toNumber();
         const meta = grantMeta[roundId];
@@ -484,7 +485,7 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
           const pk = new PublicKey(meta.walletAddress);
           const lamports = await connection.getBalance(pk);
           result[roundId] = lamports / LAMPORTS_PER_SOL;
-        } catch { /* invalid pubkey */ }
+        } catch { /* invalid pubkey or RPC error */ }
       })
     );
     setWalletBalances(result);
@@ -614,7 +615,15 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
         <p className="text-stone-500 text-sm mb-8">Sorted by votes. Funds go directly to the project wallet.</p>
 
         {sortedRounds.length === 0 ? (
-          <div className="text-center py-16 text-stone-400">No grant rounds yet.</div>
+          <div className="text-center py-16">
+            <Shield size={32} className="mx-auto mb-4 text-stone-200" />
+            <p className="text-stone-400 text-sm font-bold uppercase tracking-widest">
+              {connected ? 'No grant rounds on-chain yet.' : 'Connect your wallet to load grant rounds.'}
+            </p>
+            {!connected && (
+              <p className="text-stone-300 text-xs mt-2">You can still stake SOL above once connected.</p>
+            )}
+          </div>
         ) : (
           <div className="space-y-6">
             {sortedRounds.map((round, idx) => {
