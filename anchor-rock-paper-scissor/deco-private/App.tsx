@@ -277,9 +277,14 @@ const App: React.FC = () => {
   const [myVotes, setMyVotes]             = useState<VoteData[]>([]);
   const [votedRounds, setVotedRounds]     = useState<Record<number, boolean>>({});
   const [portfolioOpen, setPortfolioOpen] = useState(false);
-  const [submitName, setSubmitName]       = useState('');
-  const [submitDesc, setSubmitDesc]       = useState('');
-  const [submitPubkey, setSubmitPubkey]   = useState('');
+  const [submitName, setSubmitName]         = useState('');
+  const [submitDesc, setSubmitDesc]         = useState('');
+  const [submitPubkey, setSubmitPubkey]     = useState('');
+  const [submitGitRepo, setSubmitGitRepo]   = useState('');
+  const [submitFounder, setSubmitFounder]   = useState('');
+  const [submitTwitter, setSubmitTwitter]   = useState('');
+  const [submitImage, setSubmitImage]       = useState<File | null>(null);
+  const [submitImageUrl, setSubmitImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -354,6 +359,8 @@ const App: React.FC = () => {
       await decoProgram.createGrantRound(nextId);
       showToast('✅ Grant round created for ' + submitName + ' (Round #' + nextId + ')');
       setSubmitName(''); setSubmitDesc(''); setSubmitPubkey('');
+      setSubmitGitRepo(''); setSubmitFounder(''); setSubmitTwitter('');
+      setSubmitImage(null); setSubmitImageUrl(null);
       const rounds = await decoProgram.fetchAllGrantRounds();
       setGrantRounds(rounds as GrantRoundData[]);
     } catch (e: any) { showToast('❌ Submission failed: ' + e.message); }
@@ -546,6 +553,59 @@ const App: React.FC = () => {
                   placeholder="Describe your startup, the problem you're solving, and why it belongs in the Deco ecosystem..."
                   rows={4} className="w-full px-4 py-3 border border-stone-200 rounded-xl text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors resize-none" />
               </div>
+
+              {/* Founder Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Founder Name *</label>
+                  <input type="text" value={submitFounder} onChange={e => setSubmitFounder(e.target.value)} placeholder="e.g. Alice Chen"
+                    className="w-full px-4 py-3 border border-stone-200 rounded-xl text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Twitter / X Handle</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 text-sm font-bold">@</span>
+                    <input type="text" value={submitTwitter} onChange={e => setSubmitTwitter(e.target.value.replace('@', ''))} placeholder="yourhandle"
+                      className="w-full pl-8 pr-4 py-3 border border-stone-200 rounded-xl text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Git Repo */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Git Repository URL</label>
+                <input type="url" value={submitGitRepo} onChange={e => setSubmitGitRepo(e.target.value)} placeholder="https://github.com/yourorg/yourrepo"
+                  className="w-full px-4 py-3 border border-stone-200 rounded-xl text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors font-mono text-sm" />
+              </div>
+
+              {/* Project Image */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Project Image</label>
+                <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-stone-200 rounded-xl cursor-pointer hover:border-stone-400 transition-colors bg-stone-50 overflow-hidden relative">
+                  {submitImageUrl ? (
+                    <img src={submitImageUrl} alt="preview" className="absolute inset-0 w-full h-full object-cover rounded-xl" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-stone-400">
+                      <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                      <span className="text-xs font-bold uppercase tracking-widest">Upload image</span>
+                      <span className="text-xs text-stone-300">PNG, JPG, GIF up to 5MB</span>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0] ?? null;
+                    setSubmitImage(file);
+                    if (file) setSubmitImageUrl(URL.createObjectURL(file));
+                    else setSubmitImageUrl(null);
+                  }} />
+                </label>
+                {submitImageUrl && (
+                  <button type="button" onClick={() => { setSubmitImage(null); setSubmitImageUrl(null); }}
+                    className="mt-2 text-xs text-stone-400 hover:text-stone-700 transition-colors">
+                    Remove image
+                  </button>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Project Wallet Address *</label>
                 <input type="text" value={submitPubkey} onChange={e => setSubmitPubkey(e.target.value)} placeholder="Solana public key"
