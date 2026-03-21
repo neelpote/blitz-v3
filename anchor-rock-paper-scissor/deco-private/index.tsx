@@ -17,7 +17,9 @@ import { clusterApiUrl } from '@solana/web3.js';
 import App from './App';
 
 const endpoint = clusterApiUrl('devnet');
-const wallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
+// Pass empty array — Phantom/Solflare register themselves via Wallet Standard.
+// Manually adding their adapters causes a double-registration crash.
+const wallets: any[] = [];
 
 // Catch any render crash so we never get a blank screen
 class RootErrorBoundary extends Component<{ children: React.ReactNode }, { err: string | null }> {
