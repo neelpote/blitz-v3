@@ -374,9 +374,30 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
   const [investAmt, setInvestAmt]       = useState<Record<number, string>>({});
   const [investing, setInvesting]       = useState<number | null>(null);
   const [investments, setInvestments]   = useState<VCInvestment[]>(loadVCInvestments);
+  const [walletBalances, setWalletBalances] = useState<Record<number, number>>({});
 
   const displayRounds = grantRounds.length > 0 ? grantRounds : [];
   const totalInvested = investments.reduce((s, i) => s + i.amount, 0);
+
+  // Fetch on-chain SOL balance for every project wallet — reflects all investors
+  const fetchBalances = useCallback(async () => {
+    const result: Record<number, number> = {};
+    await Promise.all(
+      displayRounds.map(async (round) => {
+        const roundId = round.roundId.toNumber();
+        const meta = grantMeta[roundId];
+        if (!meta?.walletAddress) return;
+        try {
+          const pk = new PublicKey(meta.walletAddress);
+          const lamports = await connection.getBalance(pk);
+          result[roundId] = lamports / LAMPORTS_PER_SOL;
+        } catch { /* invalid pubkey */ }
+      })
+    );
+    setWalletBalances(result);
+  }, [connection, displayRounds, grantMeta]);
+
+  useEffect(() => { fetchBalances(); }, [fetchBalances]);
 
   const handleStake = async () => {
     if (!connected || !wallet.publicKey || !wallet.sendTransaction) { showToast('Connect your wallet first.'); return; }
@@ -422,6 +443,7 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
       saveVCInvestment(inv);
       setInvestments(loadVCInvestments());
       setInvestAmt(p => ({ ...p, [roundId]: '' }));
+      fetchBalances(); // refresh on-chain totals
       showToast(`✅ Invested ${sol} SOL in ${meta?.name || `Round #${roundId}`}. Tx: ${sig.slice(0, 8)}...`);
     } catch (e: any) { showToast('❌ Investment failed: ' + e.message); }
     finally { setInvesting(null); }
@@ -445,7 +467,8 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
           <p className="text-stone-500 text-lg">Stake SOL as collateral, then invest directly into grant rounds.</p>
           <div className="flex gap-10 mt-8 flex-wrap">
             <StatBox label="Staked (session)" value={`${stakedTotal} SOL`} />
-            <StatBox label="Total Invested" value={`${totalInvested} SOL`} />
+            <StatBox label="Your Investments" value={`${totalInvested} SOL`} />
+            <StatBox label="Total On-chain Raised" value={`${Object.values(walletBalances).reduce((a, b) => a + b, 0).toFixed(3)} SOL`} />
             <StatBox label="Investments" value={investments.length} />
             <StatBox label="Active Rounds" value={displayRounds.filter(r => r.isActive).length} />
           </div>
@@ -540,9 +563,21 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
                       <div className="flex gap-6 flex-wrap text-xs">
                         <div><span className="text-stone-400 uppercase tracking-wider font-bold">Votes </span><span className="font-bold" style={{ color: GOLD }}>{votes}</span></div>
                         <div><span className="text-stone-400 uppercase tracking-wider font-bold">Asking </span><span className="font-bold text-stone-700">{meta?.askAmount ? `${meta.askAmount} SOL` : '—'}</span></div>
+                        <div><span className="text-stone-400 uppercase tracking-wider font-bold">Total Raised </span><span className="font-bold" style={{ color: GOLD }}>{walletBalances[roundId] !== undefined ? `${walletBalances[roundId].toFixed(3)} SOL` : '…'}</span></div>
                         <div><span className="text-stone-400 uppercase tracking-wider font-bold">Your Investment </span><span className="font-bold text-stone-700">{myInvested > 0 ? `${myInvested} SOL` : '—'}</span></div>
                         {meta?.gitRepo && <a href={meta.gitRepo} target="_blank" rel="noopener noreferrer" className="font-bold hover:underline" style={{ color: GOLD }}>Repo →</a>}
                       </div>
+                      {meta?.askAmount && walletBalances[roundId] !== undefined && (
+                        <div className="mt-3">
+                          <div className="flex justify-between text-xs text-stone-400 mb-1">
+                            <span>Raised: {walletBalances[roundId].toFixed(3)} SOL</span>
+                            <span>Goal: {meta.askAmount} SOL</span>
+                          </div>
+                          <div className="w-full bg-stone-100 rounded-full h-1.5">
+                            <div className="h-1.5 rounded-full transition-all" style={{ backgroundColor: GOLD, width: `${Math.min(100, (walletBalances[roundId] / parseFloat(meta.askAmount)) * 100)}%` }} />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Right: invest input */}
