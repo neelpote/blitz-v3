@@ -27,8 +27,10 @@ export function getMemberVotePda(roundId: number, voter: PublicKey): PublicKey {
 }
 
 function getDelegationPdas(accountPda: PublicKey) {
+  // buffer is owned by OUR program (seeds::program = crate::id() in the #[delegate] macro)
   const [bufferPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from('buffer'), accountPda.toBuffer()], DELEGATION_PROGRAM_ID);
+    [Buffer.from('buffer'), accountPda.toBuffer()], programId);
+  // delegation_record and delegation_metadata are owned by the delegation program
   const [delegationRecordPda] = PublicKey.findProgramAddressSync(
     [Buffer.from('delegation'), accountPda.toBuffer()], DELEGATION_PROGRAM_ID);
   const [delegationMetadataPda] = PublicKey.findProgramAddressSync(

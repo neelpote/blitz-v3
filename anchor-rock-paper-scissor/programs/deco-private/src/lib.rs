@@ -148,6 +148,7 @@ pub struct DelegateGrantRound<'info> {
     /// CHECK: GrantRound PDA to delegate
     #[account(mut, del)]
     pub pda: AccountInfo<'info>,
+    #[account(mut)]
     pub payer: Signer<'info>,
     /// CHECK: Optional ER validator
     pub validator: Option<AccountInfo<'info>>,
@@ -160,6 +161,7 @@ pub struct DelegateMemberVote<'info> {
     /// CHECK: MemberVote PDA to delegate
     #[account(mut, del)]
     pub pda: AccountInfo<'info>,
+    #[account(mut)]
     pub payer: Signer<'info>,
     /// CHECK: Optional ER validator
     pub validator: Option<AccountInfo<'info>>,
