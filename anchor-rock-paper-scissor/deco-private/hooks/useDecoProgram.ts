@@ -122,12 +122,23 @@ export function useDecoProgram() {
     return delegatePda(pda, { memberVote: { roundId: new BN(roundId), voter: wallet.publicKey } });
   }, [delegatePda, wallet.publicKey]);
 
+  const initMemberVote = useCallback(async (roundId: number) => {
+    if (!baseProgram || !wallet.publicKey) throw new Error('Wallet not connected');
+    const pda = getMemberVotePda(roundId, wallet.publicKey);
+    const tx = await (baseProgram.methods as any)
+      .initMemberVote(new BN(roundId))
+      .accounts({ memberVote: pda, voter: wallet.publicKey, systemProgram: SystemProgram.programId })
+      .rpc();
+    console.log('✅ MemberVote initialized:', tx);
+    return tx;
+  }, [baseProgram, wallet.publicKey]);
+
   const castVote = useCallback(async (roundId: number, projectPubkey: PublicKey) => {
     if (!routerProgram || !wallet.publicKey) throw new Error('Wallet not connected');
     const pda = getMemberVotePda(roundId, wallet.publicKey);
     const tx = await (routerProgram.methods as any)
       .castVote(new BN(roundId), projectPubkey)
-      .accounts({ memberVote: pda, voter: wallet.publicKey, systemProgram: SystemProgram.programId })
+      .accounts({ memberVote: pda, voter: wallet.publicKey })
       .rpc();
     console.log('✅ Vote cast via Magic Router:', tx);
     return tx;
@@ -175,6 +186,7 @@ export function useDecoProgram() {
     createGrantRound,
     delegateGrantRound,
     delegateMemberVote,
+    initMemberVote,
     castVote,
     fetchAllGrantRounds,
     fetchMyVotes,

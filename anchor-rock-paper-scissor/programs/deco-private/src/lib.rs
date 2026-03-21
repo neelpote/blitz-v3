@@ -24,16 +24,25 @@ pub mod deco_private {
         Ok(())
     }
 
+    /// Initialize a member_vote PDA on base chain so it can be delegated to the ER
+    pub fn init_member_vote(ctx: Context<InitMemberVote>, round_id: u64) -> Result<()> {
+        let vote = &mut ctx.accounts.member_vote;
+        vote.round_id = round_id;
+        vote.voter = ctx.accounts.voter.key();
+        vote.voted_for = None;
+        msg!("MemberVote initialized for voter {} round {}", vote.voter, round_id);
+        Ok(())
+    }
+
     /// Cast a private vote — runs on Ephemeral Rollup (TEE)
+    /// member_vote must already exist and be delegated before calling this
     pub fn cast_vote(
         ctx: Context<CastVote>,
-        round_id: u64,
+        _round_id: u64,
         project_pubkey: Pubkey,
     ) -> Result<()> {
         let vote = &mut ctx.accounts.member_vote;
         require!(vote.voted_for.is_none(), DecoError::AlreadyVoted);
-        vote.round_id = round_id;
-        vote.voter = ctx.accounts.voter.key();
         vote.voted_for = Some(project_pubkey);
         msg!("Vote cast by {} for {}", vote.voter, project_pubkey);
         Ok(())
@@ -85,9 +94,9 @@ pub struct CreateGrantRound<'info> {
 
 #[derive(Accounts)]
 #[instruction(round_id: u64)]
-pub struct CastVote<'info> {
+pub struct InitMemberVote<'info> {
     #[account(
-        init_if_needed,
+        init,
         payer = voter,
         space = 8 + MemberVote::LEN,
         seeds = [MEMBER_VOTE_SEED, &round_id.to_le_bytes(), voter.key().as_ref()],
@@ -97,6 +106,18 @@ pub struct CastVote<'info> {
     #[account(mut)]
     pub voter: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(round_id: u64)]
+pub struct CastVote<'info> {
+    #[account(
+        mut,
+        seeds = [MEMBER_VOTE_SEED, &round_id.to_le_bytes(), voter.key().as_ref()],
+        bump
+    )]
+    pub member_vote: Account<'info, MemberVote>,
+    pub voter: Signer<'info>,
 }
 
 #[commit]
