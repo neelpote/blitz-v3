@@ -691,8 +691,13 @@ const App: React.FC = () => {
                   <input type="file" accept="image/*" className="hidden" onChange={e => {
                     const file = e.target.files?.[0] ?? null;
                     setSubmitImage(file);
-                    if (file) setSubmitImageUrl(URL.createObjectURL(file));
-                    else setSubmitImageUrl(null);
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = ev => setSubmitImageUrl(ev.target?.result as string ?? null);
+                      reader.readAsDataURL(file);
+                    } else {
+                      setSubmitImageUrl(null);
+                    }
                   }} />
                 </label>
                 {submitImageUrl && (
