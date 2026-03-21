@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd deco-private && npm install && npm run build",
+  "outputDirectory": "deco-private/dist",
+  "installCommand": "echo 'skip root install'",
+  "framework": null
+}
