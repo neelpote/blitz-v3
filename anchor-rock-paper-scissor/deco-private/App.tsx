@@ -504,12 +504,12 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
         SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: TREASURY, lamports: Math.floor(sol * LAMPORTS_PER_SOL) })
       );
       const sig = await wallet.sendTransaction(tx, connection);
-      try {
-        await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-      } catch { /* timeout — tx likely landed, treat as success */ }
+      // Update UI immediately — don't block on confirmation
       setStakedTotal(p => p + sol);
       setStakeAmt('');
-      showToast(`✅ Staked ${sol} SOL as VC collateral. Tx: ${sig.slice(0, 8)}...`);
+      showToast(`✅ Staked ${sol} SOL. Tx: ${sig.slice(0, 8)}...`);
+      // Confirm in background
+      connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').catch(() => {});
     } catch (e: any) { showToast('❌ Stake failed: ' + e.message); }
     finally { setStaking(false); }
   };
@@ -530,15 +530,16 @@ const VCPage = ({ grantRounds, grantMeta, voteCounts, onBack, showToast, connect
         SystemProgram.transfer({ fromPubkey: wallet.publicKey, toPubkey: dest, lamports: Math.floor(sol * LAMPORTS_PER_SOL) })
       );
       const sig = await wallet.sendTransaction(tx, connection);
-      try {
-        await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-      } catch { /* timeout — tx likely landed, treat as success */ }
+      // Update UI immediately — don't block on confirmation
       const inv: VCInvestment = { roundId, amount: sol, ts: Date.now() };
       saveVCInvestment(inv);
       setInvestments(loadVCInvestments());
       setInvestAmt(p => ({ ...p, [roundId]: '' }));
-      fetchBalances(); // refresh on-chain totals
       showToast(`✅ Invested ${sol} SOL in ${meta?.name || `Round #${roundId}`}. Tx: ${sig.slice(0, 8)}...`);
+      // Confirm + refresh balances in background
+      connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+        .then(() => fetchBalances())
+        .catch(() => fetchBalances());
     } catch (e: any) { showToast('❌ Investment failed: ' + e.message); }
     finally { setInvesting(null); }
   };
