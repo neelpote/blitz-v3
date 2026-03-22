@@ -211,10 +211,13 @@ export function useDecoProgram() {
     const teeProgram  = new Program(IDL_JSON as any, teeProvider);
 
     const pda = getMemberVotePda(roundId, wallet.publicKey);
+
+    // Fetch blockhash from the same connection the transaction will be sent through.
+    const { blockhash, lastValidBlockHeight } = await teeConn.getLatestBlockhash('confirmed');
     const tx = await (teeProgram.methods as any)
       .castVote(new BN(roundId), projectPubkey)
-      .accounts({ memberVote: pda, voter: wallet.publicKey })
-      .rpc();
+      .accounts({ memberVote: pda, grantRound: getGrantRoundPda(roundId), voter: wallet.publicKey })
+      .rpc({ blockhash, lastValidBlockHeight });
     console.log(`castVote tx (${teeAuthenticated ? 'TEE' : 'router fallback'}):`, tx);
     return { teeAuthenticated };
   }, [wallet]);

@@ -61,6 +61,15 @@
             ]
           }
         },
+        {
+          "name": "grant_round",
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [103, 114, 97, 110, 116, 95, 114, 111, 117, 110, 100] },
+              { "kind": "arg", "path": "round_id" }
+            ]
+          }
+        },
         { "name": "voter", "signer": true }
       ],
       "args": [

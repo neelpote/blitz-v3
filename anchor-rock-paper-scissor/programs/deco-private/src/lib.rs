@@ -41,6 +41,8 @@ pub mod deco_private {
         project_pubkey: Pubkey,
     ) -> Result<()> {
         let vote = &mut ctx.accounts.member_vote;
+        let round = &ctx.accounts.grant_round;
+        require!(round.is_active, DecoError::RoundNotActive);
         require!(vote.voted_for.is_none(), DecoError::AlreadyVoted);
         vote.voted_for = Some(project_pubkey);
         msg!("Vote cast by {} for {}", vote.voter, project_pubkey);
@@ -73,10 +75,11 @@ pub mod deco_private {
 
     /// Delegate a MemberVote PDA to the MagicBlock ER
     pub fn delegate_member_vote(ctx: Context<DelegateMemberVote>, round_id: u64) -> Result<()> {
+        let round_id_bytes = round_id.to_le_bytes();
         let voter = ctx.accounts.payer.key();
         ctx.accounts.delegate_pda(
             &ctx.accounts.payer,
-            &[MEMBER_VOTE_SEED, &round_id.to_le_bytes(), voter.as_ref()],
+            &[MEMBER_VOTE_SEED, &round_id_bytes, voter.as_ref()],
             DelegateConfig {
                 validator: ctx.accounts.validator.as_ref().map(|v| v.key()),
                 ..Default::default()
@@ -92,7 +95,7 @@ pub mod deco_private {
 #[instruction(round_id: u64)]
 pub struct CreateGrantRound<'info> {
     #[account(
-        init_if_needed,
+        init,
         payer = authority,
         space = 8 + GrantRound::LEN,
         seeds = [GRANT_ROUND_SEED, &round_id.to_le_bytes()],
@@ -129,6 +132,11 @@ pub struct CastVote<'info> {
         bump
     )]
     pub member_vote: Account<'info, MemberVote>,
+    #[account(
+        seeds = [GRANT_ROUND_SEED, &round_id.to_le_bytes()],
+        bump
+    )]
+    pub grant_round: Account<'info, GrantRound>,
     pub voter: Signer<'info>,
 }
 
