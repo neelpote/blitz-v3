@@ -21,7 +21,7 @@ export default function App() {
   } = useAlphaVault();
 
   const [viewMode,       setViewMode]       = useState<ViewMode>('public');
-  const [tab,            setTab]            = useState<Tab>('vaults');
+  const [tab,            setTab]            = useState<Tab>('about');
   const [log,            setLog]            = useState<Log[]>([]);
   const [showCreate,     setShowCreate]     = useState(false);
   const [depositTarget,  setDepositTarget]  = useState<StrategyVault | null>(null);
@@ -85,9 +85,9 @@ export default function App() {
   const totalTvl  = vaults.reduce((s, v) => s + Number(v.totalDeposits), 0);
 
   const navLinks: { label: string; tab: Tab }[] = [
+    { label: 'Home',   tab: 'about'  },
     { label: 'Vaults', tab: 'vaults' },
     { label: 'Manage', tab: 'manage' },
-    { label: 'About',  tab: 'about'  },
   ];
 
   return (
@@ -95,7 +95,7 @@ export default function App() {
       {/* Nav */}
       <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-black/10">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setTab('vaults')}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setTab('about')}>
             <div className="w-8 h-8 bg-black flex items-center justify-center">
               <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -278,119 +278,282 @@ export default function App() {
           </div>
         )}
 
-        {/* ABOUT TAB */}
+        {/* ABOUT / LANDING PAGE */}
         {tab === 'about' && (
-          <div className="max-w-7xl mx-auto px-6 py-20 space-y-24">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
-              className="grid lg:grid-cols-2 gap-16 items-center">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 border border-black/10 text-[10px] font-bold uppercase tracking-[0.2em] mb-8">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-black" />
-                  </span>
-                  Live on Solana Devnet · MagicBlock TEE
+          <div>
+            {/* ── Hero ─────────────────────────────────────────────────────── */}
+            <section className="min-h-screen flex items-center border-b border-black/5">
+              <div className="max-w-7xl mx-auto px-6 py-24 w-full">
+                <div className="grid lg:grid-cols-2 gap-16 items-center">
+                  <motion.div initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.7 }}>
+                    {/* Live badge */}
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-black/10 text-[10px] font-bold uppercase tracking-[0.2em] mb-10">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-black" />
+                      </span>
+                      Live on Solana Devnet · MagicBlock TEE
+                    </div>
+
+                    <h1 className="text-7xl md:text-8xl font-bold tracking-tighter leading-[0.88] mb-8">
+                      TRADE IN<br />
+                      <span className="italic font-serif font-light">THE DARK.</span>
+                    </h1>
+
+                    <p className="text-xl text-zinc-600 max-w-lg leading-relaxed mb-3">
+                      AlphaVault is the first shielded strategy vault marketplace on Solana.
+                    </p>
+                    <p className="text-base text-zinc-500 max-w-lg leading-relaxed mb-12">
+                      Managers run trading algorithms inside MagicBlock's Trusted Execution Environment.
+                      Investors see verified returns — never the strategy. No MEV. No front-running. No leaks.
+                    </p>
+
+                    <div className="flex flex-wrap gap-4 mb-16">
+                      <button onClick={() => setTab('vaults')} className="btn btn-primary px-10 py-4 text-sm flex items-center gap-2">
+                        Browse Vaults
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
+                      </button>
+                      <button onClick={() => { setShowCreate(true); setTab('manage'); }} className="btn btn-outline px-10 py-4 text-sm">
+                        Launch a Vault
+                      </button>
+                    </div>
+
+                    {/* Live on-chain stats */}
+                    <div className="grid grid-cols-3 gap-px bg-black/10">
+                      {[
+                        { value: vaults.length.toString(), label: 'Vaults Live' },
+                        { value: (totalTvl / 1e9).toFixed(1) + ' SOL', label: 'Total TVL' },
+                        { value: '0%', label: 'Platform Fee' },
+                      ].map(s => (
+                        <div key={s.label} className="bg-white px-5 py-4">
+                          <div className="text-2xl font-bold tracking-tighter">{s.value}</div>
+                          <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold mt-1">{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+
+                  {/* Mock vault card */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.9, delay: 0.15 }}
+                    className="relative lg:h-[580px] bg-zinc-50 border border-black/5 flex items-center justify-center overflow-hidden"
+                  >
+                    <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, black 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+
+                    <div className="relative z-10 w-full max-w-sm p-8 bg-white border border-black shadow-[20px_20px_0px_0px_rgba(0,0,0,1)]">
+                      <div className="flex justify-between items-start mb-6">
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Strategy Vault</div>
+                          <div className="text-xl font-bold tracking-tight">Momentum Alpha v1</div>
+                        </div>
+                        <span className="badge badge-open border border-green-200">Active</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-px bg-black/5 mb-6">
+                        {[
+                          { label: 'Performance', value: '+18.4%' },
+                          { label: 'TVL', value: '42.5 SOL' },
+                          { label: 'Perf Fee', value: '10%' },
+                          { label: 'Trades', value: '247' },
+                        ].map(f => (
+                          <div key={f.label} className="bg-white p-4">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">{f.label}</div>
+                            <div className="text-xl font-bold tracking-tighter">{f.value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2 mb-6">
+                        {[
+                          { label: 'Strategy', value: '████████ (TEE)' },
+                          { label: 'Positions', value: '████████ (TEE)' },
+                        ].map(r => (
+                          <div key={r.label} className="flex justify-between text-[11px] font-bold uppercase tracking-widest">
+                            <span className="text-zinc-400">{r.label}</span>
+                            <span className="text-zinc-300">{r.value}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest">
+                          <span className="text-zinc-400">Privacy</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                            TEE Shielded
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Fake progress bar */}
+                      <div className="h-1 w-full bg-zinc-100">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: '72%' }}
+                          transition={{ duration: 1.4, delay: 0.6 }}
+                          className="h-1 bg-black"
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-1.5">
+                        <span>72% funded</span>
+                        <span>30.6 / 42.5 SOL</span>
+                      </div>
+                    </div>
+
+                    <div className="absolute top-8 right-8 w-24 h-24 border border-black/10 rounded-full animate-pulse" />
+                    <div className="absolute bottom-8 left-8 w-32 h-32 border border-black/5 rotate-45" />
+                  </motion.div>
                 </div>
-                <h1 className="text-6xl md:text-7xl font-bold tracking-tighter leading-[0.9] mb-8">
-                  SHIELDED<br /><span className="italic font-serif font-light">ALPHA VAULTS</span>
-                </h1>
-                <p className="text-xl text-zinc-600 max-w-lg leading-relaxed mb-4">
-                  AlphaVault lets strategy managers run trading bots inside MagicBlock's TEE. Investors see verified performance — not the strategy.
-                </p>
-                <p className="text-base text-zinc-500 max-w-lg leading-relaxed mb-10">
-                  Like the master chef who proves their burger is the best without giving away the recipe — AlphaVault proves returns without exposing the algorithm.
-                </p>
-                <div className="flex gap-4">
-                  <button onClick={() => setTab('vaults')} className="btn btn-primary px-8 py-4 text-sm flex items-center gap-2">
-                    Browse Vaults
-                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                  </button>
-                  <button onClick={() => setTab('manage')} className="btn btn-outline px-8 py-4 text-sm">Manage Vault</button>
+              </div>
+            </section>
+
+            {/* ── Problem / Solution ───────────────────────────────────────── */}
+            <section className="py-24 border-b border-black/5">
+              <div className="max-w-7xl mx-auto px-6">
+                <div className="grid lg:grid-cols-2 gap-16">
+                  <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mb-4">The Problem</div>
+                    <h2 className="text-4xl font-bold tracking-tighter mb-6">Public blockchains kill your edge</h2>
+                    <div className="space-y-4 text-zinc-600 leading-relaxed text-sm">
+                      <p>If you deploy a profitable trading algorithm on Solana, everyone can see it. Competitors watch your wallet and copy every trade for free. MEV bots see your transactions in the mempool and front-run them.</p>
+                      <p>Your edge evaporates the moment it's on-chain. This is why serious institutional traders keep their algorithms off-chain. Standard DeFi is too transparent for high-level finance.</p>
+                      <p>The result: the best strategies never touch DeFi. Investors have no way to access institutional-grade returns on-chain.</p>
+                    </div>
+                  </motion.div>
+                  <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.1 }}>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mb-4">The Solution</div>
+                    <h2 className="text-4xl font-bold tracking-tighter mb-6">Prove returns without revealing the recipe</h2>
+                    <div className="space-y-4 text-zinc-600 leading-relaxed text-sm">
+                      <p>AlphaVault runs trading logic inside MagicBlock's Trusted Execution Environment — secure hardware that encrypts all state. No one can see your positions, your strategy, or your trades.</p>
+                      <p>The TEE generates a cryptographic performance certificate. Investors verify the proof, not the strategy. Like a chef who proves their food is the best without giving you the recipe.</p>
+                      <p>Gasless execution at ~50ms. No MEV. No front-running. Settlement commits back to Solana L1 atomically — no trust, no intermediary.</p>
+                    </div>
+                  </motion.div>
                 </div>
-                <div className="mt-16 grid grid-cols-4 gap-px bg-black/10">
-                  {[{ value: '0%', label: 'Platform Fee' }, { value: '~50ms', label: 'ER Latency' }, { value: 'TEE', label: 'Privacy' }, { value: 'L1', label: 'Settlement' }].map(s => (
-                    <div key={s.label} className="bg-white pr-4 py-4">
-                      <div className="text-xl font-bold tracking-tighter">{s.value}</div>
-                      <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold mt-1">{s.label}</div>
+              </div>
+            </section>
+
+            {/* ── How it works ─────────────────────────────────────────────── */}
+            <section className="py-24 border-b border-black/5">
+              <div className="max-w-7xl mx-auto px-6">
+                <div className="mb-12">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mb-3">Process</div>
+                  <h2 className="text-4xl font-bold tracking-tighter">Four steps, fully on-chain</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-black/10">
+                  {[
+                    { n: '01', title: 'Create Vault', body: 'Manager deploys a StrategyVault PDA on Solana L1. Sets a name and performance fee (0–50%). Investors can immediately deposit SOL.' },
+                    { n: '02', title: 'Delegate to TEE', body: 'The vault PDA is delegated to MagicBlock\'s Private Ephemeral Rollup. All trade data is now shielded inside Intel TDX hardware — invisible to everyone.' },
+                    { n: '03', title: 'Trade in the Dark', body: 'Manager records trade results inside the ER. Investors see only the aggregate performance certificate — not individual trades, positions, or strategy logic.' },
+                    { n: '04', title: 'Settle & Withdraw', body: 'Manager settles back to L1, deposits net yield to escrow. Performance fee deducted. Investors withdraw their proportional share including profits.' },
+                  ].map(s => (
+                    <div key={s.n} className="bg-white p-10 flex gap-6 hover:bg-zinc-50 transition-colors">
+                      <div className="text-[11px] font-bold tracking-widest text-zinc-200 shrink-0 w-8 pt-0.5">{s.n}</div>
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-widest mb-3">{s.title}</div>
+                        <p className="text-sm text-zinc-600 leading-relaxed">{s.body}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.2 }}
-                className="relative lg:h-[520px] bg-zinc-50 border border-black/5 flex items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle, black 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
-                <div className="relative z-10 w-full max-w-sm p-8 bg-white border border-black shadow-[16px_16px_0px_0px_rgba(0,0,0,1)]">
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Strategy Vault</div>
-                      <div className="text-xl font-bold tracking-tight">Momentum Alpha v1</div>
-                    </div>
-                    <span className="badge badge-open border border-green-200">Active</span>
+            </section>
+
+            {/* ── For managers / investors ─────────────────────────────────── */}
+            <section className="py-24 border-b border-black/5">
+              <div className="max-w-7xl mx-auto px-6">
+                <div className="grid md:grid-cols-2 gap-px bg-black/10">
+                  {/* Managers */}
+                  <div className="bg-white p-12">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mb-4">For Strategy Managers</div>
+                    <h3 className="text-3xl font-bold tracking-tighter mb-6">Monetise your edge without exposing it</h3>
+                    <ul className="space-y-3 text-sm text-zinc-600 mb-10">
+                      {[
+                        'Deploy a vault with your name and performance fee',
+                        'Delegate to MagicBlock TEE — trades are fully shielded',
+                        'Record trade results gaslessly at ~50ms',
+                        'Earn performance fees only on profits — aligned incentives',
+                        'Settle back to L1 when ready — atomic, trustless',
+                      ].map(item => (
+                        <li key={item} className="flex items-start gap-3">
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-black shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                    <button onClick={() => { setTab('manage'); }} className="btn btn-primary px-8 py-3">
+                      Launch Your Vault →
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-px bg-black/5 mb-6">
-                    {[{ label: 'Performance', value: '+18.4%' }, { label: 'TVL', value: '42.5 SOL' }, { label: 'Perf Fee', value: '10%' }, { label: 'Trades', value: '247' }].map(f => (
-                      <div key={f.label} className="bg-white p-4">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">{f.label}</div>
-                        <div className="text-xl font-bold tracking-tighter">{f.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest">
-                      <span className="text-zinc-400">Strategy</span><span>████████ (TEE)</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest">
-                      <span className="text-zinc-400">Positions</span><span>████████ (TEE)</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest">
-                      <span className="text-zinc-400">Privacy</span>
-                      <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />TEE Shielded</span>
-                    </div>
+
+                  {/* Investors */}
+                  <div className="bg-zinc-950 text-white p-12">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-4">For Investors</div>
+                    <h3 className="text-3xl font-bold tracking-tighter mb-6">Access institutional returns on-chain</h3>
+                    <ul className="space-y-3 text-sm text-zinc-400 mb-10">
+                      {[
+                        'Browse vaults — performance encrypted until you authenticate',
+                        'Sign a TEE challenge with your wallet to decrypt values',
+                        'Deposit SOL and receive proportional shares',
+                        'Track performance in real-time via the TEE',
+                        'Withdraw your share after settlement — no lock-ups',
+                      ].map(item => (
+                        <li key={item} className="flex items-start gap-3">
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-white shrink-0" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                    <button onClick={() => setTab('vaults')} className="btn btn-primary px-8 py-3">
+                      Browse Vaults →
+                    </button>
                   </div>
                 </div>
-                <div className="absolute top-8 right-8 w-20 h-20 border border-black/10 rounded-full animate-pulse" />
-              </motion.div>
-            </motion.div>
+              </div>
+            </section>
 
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 mb-3">How It Works</div>
-              <h2 className="text-4xl font-bold tracking-tighter mb-10">Four steps, fully on-chain</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-black/10">
-                {[
-                  { n: '01', title: 'Create Vault', body: 'Manager deploys a StrategyVault PDA on Solana L1. Sets a performance fee (0–50%). Investors can immediately deposit SOL.' },
-                  { n: '02', title: 'Delegate to TEE', body: 'The vault PDA is delegated to MagicBlock\'s Private Ephemeral Rollup. All trade data is now shielded inside the TEE — invisible to observers.' },
-                  { n: '03', title: 'Trade in TEE', body: 'Manager records trade results inside the ER. Investors see only the aggregate performance certificate — not individual trades, positions, or strategy logic.' },
-                  { n: '04', title: 'Settle & Withdraw', body: 'Manager settles the vault back to L1. Performance fee is deducted. Investors withdraw their proportional share including any profits.' },
-                ].map(s => (
-                  <div key={s.n} className="bg-white p-10 flex gap-6">
-                    <div className="text-[11px] font-bold tracking-widest text-zinc-200 shrink-0 w-8 pt-0.5">{s.n}</div>
-                    <div>
-                      <div className="text-[11px] font-bold uppercase tracking-widest mb-3">{s.title}</div>
-                      <p className="text-sm text-zinc-600 leading-relaxed">{s.body}</p>
+            {/* ── Architecture ─────────────────────────────────────────────── */}
+            <section className="py-24 bg-black text-white">
+              <div className="max-w-7xl mx-auto px-6">
+                <div className="mb-12">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-3">Architecture</div>
+                  <h2 className="text-4xl font-bold tracking-tighter">Built on MagicBlock</h2>
+                </div>
+                <div className="grid md:grid-cols-3 gap-px bg-white/10 mb-16">
+                  {[
+                    { title: 'Private ER (TEE)', body: 'Trade execution runs inside Intel TDX hardware at tee.magicblock.app. The TEE generates cryptographic attestations — investors verify performance without seeing the strategy.' },
+                    { title: 'Ephemeral Rollups', body: 'Gasless ~50ms trade recording inside the ER via devnet-router.magicblock.app. No MEV, no front-running. The strategy is invisible until settlement.' },
+                    { title: 'L1 Settlement', body: 'Settlement commits ER state back to Solana via commit_and_undelegate. Performance fees and investor payouts distributed atomically — no trust, no intermediary.' },
+                  ].map(f => (
+                    <div key={f.title} className="bg-black p-10 space-y-4">
+                      <div className="text-[11px] font-bold uppercase tracking-widest">{f.title}</div>
+                      <p className="text-sm text-zinc-400 leading-relaxed">{f.body}</p>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  ))}
+                </div>
 
-            <div className="bg-black text-white p-16">
-              <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-3">Architecture</div>
-              <h2 className="text-4xl font-bold tracking-tighter mb-10">Built on MagicBlock</h2>
-              <div className="grid md:grid-cols-3 gap-px bg-white/10">
-                {[
-                  { title: 'Private ER (TEE)', body: 'Trade execution runs inside Intel TDX hardware. The TEE generates cryptographic attestations — investors verify performance without seeing the strategy.' },
-                  { title: 'Ephemeral Rollups', body: 'Gasless ~50ms trade recording inside the ER. No MEV, no front-running. The strategy is invisible until settlement.' },
-                  { title: 'L1 Settlement', body: 'Settlement commits ER state back to Solana. Performance fees and investor payouts are distributed atomically — no trust, no intermediary.' },
-                ].map(f => (
-                  <div key={f.title} className="bg-black p-10 space-y-4">
-                    <div className="text-[11px] font-bold uppercase tracking-widest">{f.title}</div>
-                    <p className="text-sm text-zinc-400 leading-relaxed">{f.body}</p>
+                {/* CTA */}
+                <div className="border border-white/10 p-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-widest mb-2">Ready to start?</div>
+                    <p className="text-sm text-zinc-400 max-w-lg">
+                      Connect your wallet, authenticate with the TEE, and either browse existing vaults or launch your own strategy.
+                    </p>
                   </div>
-                ))}
+                  <div className="flex gap-4 shrink-0">
+                    <button onClick={() => setTab('vaults')}
+                      className="px-8 py-3 bg-white text-black text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-100 transition-colors">
+                      Browse Vaults →
+                    </button>
+                    <button onClick={() => setTab('manage')}
+                      className="px-8 py-3 border border-white/20 text-white text-[11px] font-bold uppercase tracking-widest hover:border-white/40 transition-colors">
+                      Launch Vault
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            </section>
           </div>
         )}
       </main>
