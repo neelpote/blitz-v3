@@ -1,3 +1,0 @@
-[submodule "private-payments"]
-	path = private-payments
-	url = https://github.com/magicblock-labs/private-payments-demo.git
