@@ -351,5 +351,4 @@ Standard Solana is 100% public. Every trade, every position, every strategy is v
 - **L1 Settlement** — when a vault settles, the ER commits state back to Solana L1 atomically. No trust, no intermediary
 
 ---
-
-*Built with ❤️ for the Solana Frontier Hackathon 2025*
+Thanks for reading
